@@ -28,6 +28,14 @@ from aiogram.types import (
     User,
 )
 
+# Импорт базы данных
+from database import (
+    add_or_update_user,
+    increment_user_submissions,
+    add_log,
+    add_media_submission,
+)
+
 
 # Конфиг. Значения можно переопределить через переменные окружения.
 TOKEN = os.getenv("BOT_TOKEN", "8579457514:AAEAzcBbCpf4Lq9wj762cKhzzdjEXjf_Zso").strip()
@@ -35,6 +43,7 @@ LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "-1003626245326"))
 DISCORD_URL = os.getenv("DISCORD_URL", "https://discord.com/invite/2H29WNfNa3").strip()
 CREATOR_URL = os.getenv("CREATOR_URL", "https://t.me/pexepo").strip()
 SUBMISSION_COOLDOWN_SECONDS = int(os.getenv("SUBMISSION_COOLDOWN_SECONDS", "90"))
+
 
 def parse_admin_ids(raw_value: str | None) -> set[int]:
     value = raw_value or "1784522503"
@@ -153,10 +162,10 @@ RULES = {
     "edit": {
         "image": RULES_IMAGE,
         "caption": (
-            "<tg-emoji emoji-id=\"5440660757194744323\">‼</tg-emoji><b>ПЕРЕД ТЕМ КАК КИДАТЬ ЭДИТ ОЗНАКОМЬСЯ С ПРАВИЛАМИ</b>\n\n"
-            "1. Принимаются только ваши собственные работы.<tg-emoji emoji-id=\"5244555952073499173\">❗</tg-emoji>\n"
-            "2. NSFL строго нет, на пост NSFW эдита шанс мизерный.<tg-emoji emoji-id=\"5267395415627567516\">💕</tg-emoji>\n"
-            "3. Убедитесь что эдит не усыпан пикселями, низким битрейтом.<tg-emoji emoji-id=\"6001305528653844732\">❕</tg-emoji>\n"
+            '<tg-emoji emoji-id="5440660757194744323">‼</tg-emoji><b>ПЕРЕД ТЕМ КАК КИДАТЬ ЭДИТ ОЗНАКОМЬСЯ С ПРАВИЛАМИ</b>\n\n'
+            '1. Принимаются только ваши собственные работы.<tg-emoji emoji-id="5244555952073499173">❗</tg-emoji>\n'
+            '2. NSFL строго нет, на пост NSFW эдита шанс мизерный.<tg-emoji emoji-id="5267395415627567516">💕</tg-emoji>\n'
+            '3. Убедитесь что эдит не усыпан пикселями, низким битрейтом.<tg-emoji emoji-id="6001305528653844732">❕</tg-emoji>\n'
             "4. Музыка, клипы, стиль абсолютно неважны.\n"
             "5. Эдит может как использоваться для постинга в канал, так и может не использоваться.\n"
             "6. Обязательно к эдиту приложите ссылку или юзернейм на одну из своих соцсеток(указать какую), в которой должно быть: если 1000+ - ссылка на телеграм канал машрум (@etomrm), меньше 1000 - приставка .mrm в вашем собственном юзернейме.\n\n"
@@ -166,9 +175,9 @@ RULES = {
     "art": {
         "image": RULES_IMAGE,
         "caption": (
-            "<tg-emoji emoji-id=\"5440660757194744323\">‼</tg-emoji> <b>ПЕРЕД ТЕМ КАК КИДАТЬ АРТ ОЗНАКОМЬСЯ С ПРАВИЛАМИ</b>\n\n"
-            "1. Принимаются только ваши собственные работы.<tg-emoji emoji-id=\"5244555952073499173\">❗</tg-emoji>\n"
-            "2. NSFL строго нет, на пост NSFW арта шанс мизерный.<tg-emoji emoji-id=\"5267395415627567516\">💕</tg-emoji>\n"
+            '<tg-emoji emoji-id="5440660757194744323">‼</tg-emoji> <b>ПЕРЕД ТЕМ КАК КИДАТЬ АРТ ОЗНАКОМЬСЯ С ПРАВИЛАМИ</b>\n\n'
+            '1. Принимаются только ваши собственные работы.<tg-emoji emoji-id="5244555952073499173">❗</tg-emoji>\n'
+            '2. NSFL строго нет, на пост NSFW арта шанс мизерный.<tg-emoji emoji-id="5267395415627567516">💕</tg-emoji>\n'
             "3. Убедитесь что арт в хорошем качестве. Файлы разрешены. Арт будет перешлен в ужатом качестве, а исходое качество будет отправлено в комментарии.\n"
             "4. Эдит может как использоваться для постинга в канал, так и может не использоваться.\n"
             "5. Обязательно к арту приложите ссылку или юзернейм на одну из своих соцсеток(указать какую), в которой должно быть: 1000+ - ссылка на телеграм канал машрум (@etomrm), меньше 1000 - приставка .mrm в вашем собственном юзернейме.\n\n"
@@ -195,9 +204,9 @@ INFO_SCREENS = {
 }
 
 START_CAPTION = (
-    "<tg-emoji emoji-id=\"5244682331486187125\">👋</tg-emoji> <b>Приветствую!</b>\n\n"
+    '<tg-emoji emoji-id="5244682331486187125">👋</tg-emoji> <b>Приветствую!</b>\n\n'
     "Это предложка для канала @etomrm. Здесь вы можете отправить свой потрясный эдит или крутой арт, который мы заметим и выложим в канал, если работа действительно достойная\n"
-    "Бот сначала покажет правила, затем попросит прислать работу одним сообщением.<tg-emoji emoji-id=\"5244726380670773077\">⚡</tg-emoji>"
+    'Бот сначала покажет правила, затем попросит прислать работу одним сообщением.<tg-emoji emoji-id="5244726380670773077">⚡</tg-emoji>'
 )
 
 BANNED_CAPTION = (
@@ -206,19 +215,18 @@ BANNED_CAPTION = (
 )
 
 NO_ADMIN_CAPTION = (
-    "🚫 <b>Недостаточно прав</b>\n\n"
-    "Эта команда доступна только администраторам бота."
+    "🚫 <b>Недостаточно прав</b>\n\nЭта команда доступна только администраторам бота."
 )
 
 SEND_WORK_CAPTION = (
-    "<tg-emoji emoji-id=\"5253742260054409879\">📨</tg-emoji> <b>Отправляйте вашу работу</b>\n\n"
+    '<tg-emoji emoji-id="5253742260054409879">📨</tg-emoji> <b>Отправляйте вашу работу</b>\n\n'
     "Пришлите её одним сообщением в этот чат. Не забудьте подпись\n"
     "Поддерживаются фото, видео, анимации и файлы."
 )
 
 SUCCESS_CAPTION = (
-    "<tg-emoji emoji-id=\"5206607081334906820\">✔</tg-emoji> <b>Ваша работа была успешно отправлена!</b>\n\n"
-    "Она уже улетела к нам и будет рассмотрена как можно скорее <tg-emoji emoji-id=\"5287598581010691474\">❤</tg-emoji>"
+    '<tg-emoji emoji-id="5206607081334906820">✔</tg-emoji> <b>Ваша работа была успешно отправлена!</b>\n\n'
+    'Она уже улетела к нам и будет рассмотрена как можно скорее <tg-emoji emoji-id="5287598581010691474">❤</tg-emoji>'
 )
 
 SUCCESS_BACK_CAPTION = (
@@ -228,13 +236,12 @@ SUCCESS_BACK_CAPTION = (
 )
 
 INVALID_WORK_CAPTION = (
-    "<tg-emoji emoji-id=\"5447644880824181073\">⚠</tg-emoji> <b>Нужна сама работа</b>\n\n"
+    '<tg-emoji emoji-id="5447644880824181073">⚠</tg-emoji> <b>Нужна сама работа</b>\n\n'
     "Отправьте фото, видео, анимацию или документ одним сообщением."
 )
 
 UNKNOWN_COMMAND_CAPTION = (
-    "ℹ️ <b>Команда не распознана</b>\n\n"
-    "Используйте кнопки в меню ниже."
+    "ℹ️ <b>Команда не распознана</b>\n\nИспользуйте кнопки в меню ниже."
 )
 
 EDIT_INVALID_CAPTION = (
@@ -386,16 +393,40 @@ def persistent_menu() -> ReplyKeyboardMarkup:
     return build_reply_keyboard(
         [
             [
-                (BTN_SEND_EDIT, ICON_SEND_EDIT, "send_edit", "5190674036861992770", "primary"),
-                (BTN_SEND_ART, ICON_SEND_ART, "send_art", "5409109841538994759", "primary"),
+                (
+                    BTN_SEND_EDIT,
+                    ICON_SEND_EDIT,
+                    "send_edit",
+                    "5190674036861992770",
+                    "primary",
+                ),
+                (
+                    BTN_SEND_ART,
+                    ICON_SEND_ART,
+                    "send_art",
+                    "5409109841538994759",
+                    "primary",
+                ),
             ],
             [
                 (BTN_ACCEPT, ICON_ACCEPT, "accept", "5289671946408043028", "success"),
                 (BTN_DECLINE, ICON_DECLINE, "decline", "5289576280306493734", "danger"),
             ],
             [
-                (BTN_DISCORD, ICON_DISCORD, "discord", "5325612636467903082", "default"),
-                (BTN_CREATOR, ICON_CREATOR, "creator", "5330237710655306682", "default"),
+                (
+                    BTN_DISCORD,
+                    ICON_DISCORD,
+                    "discord",
+                    "5325612636467903082",
+                    "default",
+                ),
+                (
+                    BTN_CREATOR,
+                    ICON_CREATOR,
+                    "creator",
+                    "5330237710655306682",
+                    "default",
+                ),
             ],
             [
                 (BTN_BACK, ICON_BACK, "back", None, "default"),
@@ -409,12 +440,36 @@ def main_menu() -> ReplyKeyboardMarkup:
     return build_reply_keyboard(
         [
             [
-                (BTN_SEND_EDIT, ICON_SEND_EDIT, "send_edit", "5190674036861992770", "primary"),
-                (BTN_SEND_ART, ICON_SEND_ART, "send_art", "5409109841538994759", "primary"),
+                (
+                    BTN_SEND_EDIT,
+                    ICON_SEND_EDIT,
+                    "send_edit",
+                    "5190674036861992770",
+                    "primary",
+                ),
+                (
+                    BTN_SEND_ART,
+                    ICON_SEND_ART,
+                    "send_art",
+                    "5409109841538994759",
+                    "primary",
+                ),
             ],
             [
-                (BTN_DISCORD, ICON_DISCORD, "discord", "5325612636467903082", "default"),
-                (BTN_CREATOR, ICON_CREATOR, "creator", "5330237710655306682", "default"),
+                (
+                    BTN_DISCORD,
+                    ICON_DISCORD,
+                    "discord",
+                    "5325612636467903082",
+                    "default",
+                ),
+                (
+                    BTN_CREATOR,
+                    ICON_CREATOR,
+                    "creator",
+                    "5330237710655306682",
+                    "default",
+                ),
             ],
         ],
         "Выберите действие",
@@ -423,10 +478,12 @@ def main_menu() -> ReplyKeyboardMarkup:
 
 def rules_menu() -> ReplyKeyboardMarkup:
     return build_reply_keyboard(
-        [[
-            (BTN_ACCEPT, ICON_ACCEPT, "accept", "5289671946408043028", "success"),
-            (BTN_DECLINE, ICON_DECLINE, "decline", "5289576280306493734", "danger"),
-        ]],
+        [
+            [
+                (BTN_ACCEPT, ICON_ACCEPT, "accept", "5289671946408043028", "success"),
+                (BTN_DECLINE, ICON_DECLINE, "decline", "5289576280306493734", "danger"),
+            ]
+        ],
         "Примите или отклоните правила",
     )
 
@@ -658,7 +715,6 @@ def remember_user(user: User | None) -> bool:
     except OSError:
         LOGGER.exception("Не удалось сохранить users.json")
 
-
     return is_new_user
 
 
@@ -674,9 +730,17 @@ def get_user_profile(user_id: int) -> dict[str, Any]:
 def format_user_card(user_id: int, live_user: User | None = None) -> str:
     profile = get_user_profile(user_id)
 
-    username = (live_user.username if live_user else "") or profile.get("username") or ""
-    full_name = (live_user.full_name if live_user else "") or profile.get("full_name") or ""
-    language_code = (live_user.language_code if live_user else "") or profile.get("language_code") or ""
+    username = (
+        (live_user.username if live_user else "") or profile.get("username") or ""
+    )
+    full_name = (
+        (live_user.full_name if live_user else "") or profile.get("full_name") or ""
+    )
+    language_code = (
+        (live_user.language_code if live_user else "")
+        or profile.get("language_code")
+        or ""
+    )
 
     mention_label = escape_text(full_name or f"Пользователь {user_id}")
     lines = [
@@ -715,8 +779,8 @@ def format_user_line(user_id: int) -> str:
 def build_info_caption(kind: str) -> str:
     data = INFO_SCREENS[kind]
     return (
-        f'{data["icon"]} <b>{escape_text(data["title"])}</b>\n\n'
-        f'{escape_text(data["description"])}'
+        f"{data['icon']} <b>{escape_text(data['title'])}</b>\n\n"
+        f"{escape_text(data['description'])}"
     )
 
 
@@ -738,10 +802,7 @@ def build_submission_log(message: Message, kind: str) -> str:
 
 
 def build_new_user_log(user: User) -> str:
-    return (
-        "👋 <b>Новый пользователь бота</b>\n"
-        f"{format_user_card(user.id, user)}"
-    )
+    return f"👋 <b>Новый пользователь бота</b>\n{format_user_card(user.id, user)}"
 
 
 def get_allowed_content_types(kind: str) -> set[str]:
@@ -785,23 +846,19 @@ async def send_photo_screen(
             "⏳",
             reply_markup=ReplyKeyboardRemove(),
         )
-        
+
         # Отправляем фото с inline кнопками
         new_msg = await message.answer_photo(
             photo(image_path),
             caption=trim_caption(caption),
             reply_markup=inline_keyboard,
         )
-        
-        # Ждем 1 секунду перед удалением старых сообщений
-        await asyncio.sleep(1)
-        
+
         # Удаляем все предыдущие сообщения, кроме последних 3
         for i in range(4, 30):  # Начинаем с 4, чтобы оставить последние 3 сообщения
             try:
                 await bot.delete_message(
-                    chat_id=message.chat.id,
-                    message_id=message.message_id - i
+                    chat_id=message.chat.id, message_id=message.message_id - i
                 )
             except Exception:
                 pass  # Игнорируем ошибки, если сообщение не найдено
@@ -810,7 +867,7 @@ async def send_photo_screen(
             await message.delete()
         except Exception:
             LOGGER.debug("Не удалось удалить сообщение пользователя")
-        
+
         # Удаляем сообщение с песочными часами
         try:
             await remove_msg.delete()
@@ -818,7 +875,9 @@ async def send_photo_screen(
             LOGGER.debug("Не удалось удалить сообщение с ReplyKeyboardRemove")
     else:
         # Если есть reply клавиатура или нет кнопок вообще
-        photo_reply_markup = reply_keyboard if reply_keyboard is not None else ReplyKeyboardRemove()
+        photo_reply_markup = (
+            reply_keyboard if reply_keyboard is not None else ReplyKeyboardRemove()
+        )
         await message.answer_photo(
             photo(image_path),
             caption=trim_caption(caption),
@@ -845,7 +904,7 @@ async def send_callback_screen(
             text="⏳",
             reply_markup=ReplyKeyboardRemove(),
         )
-        
+
         # Затем отправляем фото с inline кнопками
         await bot.send_photo(
             chat_id=chat_id,
@@ -853,14 +912,14 @@ async def send_callback_screen(
             caption=trim_caption(caption),
             reply_markup=inline_keyboard,
         )
-        
+
         # Удаляем предыдущее сообщение (главное меню или другое)
         if old_message_id:
             try:
                 await bot.delete_message(chat_id=chat_id, message_id=old_message_id)
             except Exception:
                 LOGGER.debug("Не удалось удалить старое сообщение после callback")
-        
+
         # Удаляем сообщение с песочными часами
         try:
             await bot.delete_message(chat_id=chat_id, message_id=remove_msg.message_id)
@@ -873,9 +932,11 @@ async def send_callback_screen(
                 await callback.message.delete()
             except Exception:
                 LOGGER.debug("Не удалось удалить старое сообщение после callback")
-        
+
         # Если есть reply клавиатура или нет кнопок вообще
-        photo_reply_markup = reply_keyboard if reply_keyboard is not None else ReplyKeyboardRemove()
+        photo_reply_markup = (
+            reply_keyboard if reply_keyboard is not None else ReplyKeyboardRemove()
+        )
         await bot.send_photo(
             chat_id=chat_id,
             photo=photo(image_path),
@@ -926,7 +987,9 @@ async def show_start_screen(target: Message | CallbackQuery, state: FSMContext) 
     )
 
 
-async def show_banned_screen(target: Message | CallbackQuery, state: FSMContext) -> None:
+async def show_banned_screen(
+    target: Message | CallbackQuery, state: FSMContext
+) -> None:
     await state.clear()
     await show_screen(
         target,
@@ -937,7 +1000,9 @@ async def show_banned_screen(target: Message | CallbackQuery, state: FSMContext)
     )
 
 
-async def show_info_screen(target: Message | CallbackQuery, state: FSMContext, kind: str) -> None:
+async def show_info_screen(
+    target: Message | CallbackQuery, state: FSMContext, kind: str
+) -> None:
     await state.clear()
     await show_screen(
         target,
@@ -948,7 +1013,9 @@ async def show_info_screen(target: Message | CallbackQuery, state: FSMContext, k
     )
 
 
-async def show_rules_screen(target: Message | CallbackQuery, state: FSMContext, kind: str) -> None:
+async def show_rules_screen(
+    target: Message | CallbackQuery, state: FSMContext, kind: str
+) -> None:
     await state.set_state(Suggestion.reviewing_rules)
     await state.update_data(kind=kind)
     await show_screen(
@@ -960,7 +1027,9 @@ async def show_rules_screen(target: Message | CallbackQuery, state: FSMContext, 
     )
 
 
-async def show_send_work_screen(target: Message | CallbackQuery, state: FSMContext, kind: str) -> None:
+async def show_send_work_screen(
+    target: Message | CallbackQuery, state: FSMContext, kind: str
+) -> None:
     await state.set_state(Suggestion.waiting_for_work)
     await state.update_data(kind=kind)
     await show_screen(
@@ -1044,10 +1113,19 @@ async def set_bot_commands() -> None:
 async def cmd_start(message: Message, state: FSMContext) -> None:
     if not await ensure_allowed_message(message, state):
         return
-    
+
+    # Добавляем или обновляем пользователя в базе
+    user = message.from_user
+    add_or_update_user(
+        user_id=user.id,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
+    )
+
     # Проверяем текущее состояние
     current_state = await state.get_state()
-    
+
     # Если пользователь в процессе (не в главном меню), игнорируем команду
     if current_state is not None:
         # Отправляем уведомление, что команда недоступна
@@ -1056,7 +1134,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             "Используйте кнопки для навигации.",
         )
         return
-    
+
     await show_start_screen(message, state)
 
 
@@ -1152,20 +1230,12 @@ async def unban_user(message: Message, state: FSMContext) -> None:
     admin_card = format_user_card(message.from_user.id, message.from_user)
 
     if existed:
-        caption = (
-            "✅ <b>Пользователь разбанен</b>\n\n"
-            f"{target_card}"
-        )
+        caption = f"✅ <b>Пользователь разбанен</b>\n\n{target_card}"
         await log_to_channel(
-            "✅ <b>Разбан пользователя</b>\n"
-            f"{target_card}\n\n"
-            f"Админ:\n{admin_card}"
+            f"✅ <b>Разбан пользователя</b>\n{target_card}\n\nАдмин:\n{admin_card}"
         )
     else:
-        caption = (
-            "ℹ️ <b>Пользователь не найден в бан-листе</b>\n\n"
-            f"{target_card}"
-        )
+        caption = f"ℹ️ <b>Пользователь не найден в бан-листе</b>\n\n{target_card}"
 
     await send_photo_screen(
         message,
@@ -1296,37 +1366,67 @@ async def handle_submission(message: Message, state: FSMContext) -> None:
 
     # Отправляем медиа с информацией об отправителе в одном посте
     caption = build_submission_log(message, kind)
-    
+
     try:
+        # Определяем тип медиа и file_id
+        media_type = None
+        file_id = None
+
         if message.photo:
+            file_id = message.photo[-1].file_id
+            media_type = "photo"
             await bot.send_photo(
                 chat_id=LOG_CHANNEL_ID,
-                photo=message.photo[-1].file_id,
+                photo=file_id,
                 caption=caption,
             )
         elif message.video:
+            file_id = message.video.file_id
+            media_type = "video"
             await bot.send_video(
                 chat_id=LOG_CHANNEL_ID,
-                video=message.video.file_id,
+                video=file_id,
                 caption=caption,
             )
         elif message.animation:
+            file_id = message.animation.file_id
+            media_type = "animation"
             await bot.send_animation(
                 chat_id=LOG_CHANNEL_ID,
-                animation=message.animation.file_id,
+                animation=file_id,
                 caption=caption,
             )
         elif message.document:
+            file_id = message.document.file_id
+            media_type = "document"
             await bot.send_document(
                 chat_id=LOG_CHANNEL_ID,
-                document=message.document.file_id,
+                document=file_id,
                 caption=caption,
             )
         else:
             # Если тип медиа неизвестен, отправляем только текст
             await log_to_channel(caption)
-    except Exception:
+
+        # Сохраняем медиа в базу данных
+        if file_id and media_type:
+            add_media_submission(
+                user_id=user_id,
+                kind=kind,
+                media_type=media_type,
+                file_id=file_id,
+                caption=message.caption,
+            )
+
+        # Увеличиваем счетчик отправок
+        increment_user_submissions(user_id)
+
+        # Логируем успешную отправку
+        add_log("info", f"Успешная отправка медиа ({media_type})", user_id)
+
+    except Exception as e:
         LOGGER.exception("Не удалось отправить работу в лог-канал")
+        add_log("error", f"Ошибка отправки в канал: {str(e)}", user_id)
 
     last_submission_at[user_id] = now
     await state.clear()
@@ -1441,8 +1541,15 @@ async def show_loading(callback: CallbackQuery) -> Message:
 async def callback_start(callback: CallbackQuery, state: FSMContext) -> None:
     if not await ensure_allowed_callback(callback, state):
         return
-    await show_loading(callback)
+
+    loading_msg = await show_loading(callback)
     await show_start_screen(callback, state)
+
+    # Удаляем загрузку после успешного показа экрана
+    try:
+        await loading_msg.delete()
+    except Exception:
+        LOGGER.debug("Не удалось удалить сообщение загрузки")
 
 
 @dp.callback_query(F.data.startswith("info:"))
@@ -1455,8 +1562,14 @@ async def callback_info(callback: CallbackQuery, state: FSMContext) -> None:
         await show_start_screen(callback, state)
         return
 
-    await show_loading(callback)
+    loading_msg = await show_loading(callback)
     await show_info_screen(callback, state, kind)
+
+    # Удаляем загрузку после успешного показа экрана
+    try:
+        await loading_msg.delete()
+    except Exception:
+        LOGGER.debug("Не удалось удалить сообщение загрузки")
 
 
 @dp.callback_query(F.data.startswith("rules:"))
@@ -1469,8 +1582,14 @@ async def callback_rules(callback: CallbackQuery, state: FSMContext) -> None:
         await show_start_screen(callback, state)
         return
 
-    await show_loading(callback)
+    loading_msg = await show_loading(callback)
     await show_rules_screen(callback, state, kind)
+
+    # Удаляем загрузку после успешного показа экрана
+    try:
+        await loading_msg.delete()
+    except Exception:
+        LOGGER.debug("Не удалось удалить сообщение загрузки")
 
 
 @dp.callback_query(F.data.startswith("accept:"))
@@ -1485,7 +1604,7 @@ async def callback_accept(callback: CallbackQuery, state: FSMContext) -> None:
 
     loading_msg = await show_loading(callback)
     await show_send_work_screen(callback, state, kind)
-    
+
     # Удаляем сообщение загрузки после показа следующего экрана
     try:
         await loading_msg.delete()
@@ -1505,7 +1624,7 @@ async def callback_retry(callback: CallbackQuery, state: FSMContext) -> None:
 
     loading_msg = await show_loading(callback)
     await show_send_work_screen(callback, state, kind)
-    
+
     # Удаляем сообщение загрузки после показа следующего экрана
     try:
         await loading_msg.delete()
@@ -1533,7 +1652,11 @@ async def handle_errors(event: ErrorEvent) -> bool:
     await log_to_channel(payload)
     LOGGER.error(
         "Необработанная ошибка",
-        exc_info=(type(event.exception), event.exception, event.exception.__traceback__),
+        exc_info=(
+            type(event.exception),
+            event.exception,
+            event.exception.__traceback__,
+        ),
     )
     return True
 
