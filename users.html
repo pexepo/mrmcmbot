@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Все пользователи</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .navbar h1 {
+            font-size: 24px;
+        }
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            margin-left: 20px;
+            padding: 8px 15px;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .navbar a:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        .container {
+            max-width: 1400px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #555;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge-banned {
+            background: #fee;
+            color: #c33;
+        }
+        .badge-active {
+            background: #efe;
+            color: #3c3;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>👥 Все пользователи</h1>
+        <div>
+            <a href="/">Главная</a>
+            <a href="/users">Пользователи</a>
+            <a href="/users/active">Активные</a>
+            <a href="/logs">Логи</a>
+            <a href="/media">Медиа</a>
+            <a href="/logout">Выход</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="card">
+            <h2>Всего пользователей: {{ users|length }}</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Имя</th>
+                        <th>Username</th>
+                        <th>Первый визит</th>
+                        <th>Последняя активность</th>
+                        <th>Отправок</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.user_id }}</td>
+                        <td>{{ user.first_name }} {{ user.last_name or '' }}</td>
+                        <td>@{{ user.username or 'нет' }}</td>
+                        <td>{{ user.first_seen }}</td>
+                        <td>{{ user.last_activity }}</td>
+                        <td>{{ user.total_submissions }}</td>
+                        <td>
+                            {% if user.is_banned %}
+                            <span class="badge badge-banned">Забанен</span>
+                            {% else %}
+                            <span class="badge badge-active">Активен</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
