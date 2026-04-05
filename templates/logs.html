@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Логи</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .navbar h1 {
+            font-size: 24px;
+        }
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            margin-left: 20px;
+            padding: 8px 15px;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .navbar a:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        .container {
+            max-width: 1400px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .filters {
+            margin-bottom: 20px;
+        }
+        .filters a {
+            display: inline-block;
+            padding: 8px 15px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-right: 10px;
+        }
+        .filters a:hover {
+            background: #764ba2;
+        }
+        .log-entry {
+            padding: 15px;
+            border-left: 4px solid #667eea;
+            background: #f8f9fa;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .log-entry.error {
+            border-left-color: #c33;
+            background: #fee;
+        }
+        .log-entry.bot {
+            border-left-color: #3c3;
+            background: #efe;
+        }
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+        .log-message {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .log-type {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .log-type.error {
+            background: #c33;
+            color: white;
+        }
+        .log-type.bot {
+            background: #3c3;
+            color: white;
+        }
+        .log-type.info {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>📋 Логи</h1>
+        <div>
+            <a href="/">Главная</a>
+            <a href="/users">Пользователи</a>
+            <a href="/users/active">Активные</a>
+            <a href="/logs">Логи</a>
+            <a href="/media">Медиа</a>
+            <a href="/logout">Выход</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="card">
+            <h2>Логи {% if log_type %}({{ log_type }}){% endif %}: {{ logs|length }}</h2>
+            <div class="filters">
+                <a href="/logs">Все</a>
+                <a href="/logs?type=error">Ошибки</a>
+                <a href="/logs?type=bot">Бот</a>
+                <a href="/logs?type=info">Инфо</a>
+            </div>
+            {% for log in logs %}
+            <div class="log-entry {{ log.log_type }}">
+                <div class="log-header">
+                    <span>
+                        <span class="log-type {{ log.log_type }}">{{ log.log_type }}</span>
+                        {% if log.username %}
+                        <strong>@{{ log.username }}</strong> ({{ log.first_name }})
+                        {% endif %}
+                    </span>
+                    <span>{{ log.timestamp }}</span>
+                </div>
+                <div class="log-message">{{ log.message }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>

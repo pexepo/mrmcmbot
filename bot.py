@@ -21,6 +21,7 @@ from aiogram.types import (
     FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputMediaPhoto,
     KeyboardButton,
     Message,
     ReplyKeyboardMarkup,
@@ -28,29 +29,27 @@ from aiogram.types import (
     User,
 )
 
-
-# Конфиг. Значения можно переопределить через переменные окружения.
-TOKEN = os.getenv("BOT_TOKEN", "8579457514:AAEAzcBbCpf4Lq9wj762cKhzzdjEXjf_Zso").strip()
-LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "-1003626245326"))
-DISCORD_URL = os.getenv("DISCORD_URL", "https://discord.com/invite/2H29WNfNa3").strip()
-CREATOR_URL = os.getenv("CREATOR_URL", "https://t.me/pexepo").strip()
-SUBMISSION_COOLDOWN_SECONDS = int(os.getenv("SUBMISSION_COOLDOWN_SECONDS", "90"))
-
-def parse_admin_ids(raw_value: str | None) -> set[int]:
-    value = raw_value or "1784522503"
-    result: set[int] = set()
-    for chunk in value.split(","):
-        chunk = chunk.strip()
-        if chunk.isdigit():
-            result.add(int(chunk))
-    return result
+# Импорт базы данных
+from database import (
+    add_or_update_user,
+    increment_user_submissions,
+    add_log,
+    add_media_submission,
+)
 
 
-ADMIN_IDS = parse_admin_ids(os.getenv("ADMIN_IDS"))
+# Конфиг - работает без .env файла
+TOKEN = "8579457514:AAEAzcBbCpf4Lq9wj762cKhzzdjEXjf_Zso"
+LOG_CHANNEL_ID = -1003626245326
+DISCORD_URL = "https://discord.com/invite/2H29WNfNa3"
+CREATOR_URL = "https://t.me/pexepo"
+SUBMISSION_COOLDOWN_SECONDS = 90
+ADMIN_IDS = {1784522503}  # Добавьте свои ID через запятую
 
 BASE_DIR = Path(__file__).resolve().parent
 BANS_FILE = BASE_DIR / "bans.json"
 USERS_FILE = BASE_DIR / "users.json"
+WHY_VIDEO = BASE_DIR / "why.mp4"
 
 
 def resolve_image(stem: str) -> Path:
@@ -74,36 +73,22 @@ def resolve_optional_image(stem: str, fallback: Path) -> Path:
 
 START_IMAGE = resolve_image("start")
 SEND_WORK_IMAGE = resolve_image("send_work")
+SOCIAL_LINK_IMAGE = BASE_DIR / "social_link.png"  # Новое изображение для соц сетей
 RULES_IMAGE = BASE_DIR / "rules.png"
 SUCCESS_IMAGE = BASE_DIR / "success.png"
 DISCORD_IMAGE = resolve_optional_image("discord", START_IMAGE)
 if not SUCCESS_IMAGE.exists():
     SUCCESS_IMAGE = SEND_WORK_IMAGE
+if not SOCIAL_LINK_IMAGE.exists():
+    SOCIAL_LINK_IMAGE = START_IMAGE  # Временно используем start.png
 
 SCREEN_IMAGES = (
     START_IMAGE,
     RULES_IMAGE,
+    SOCIAL_LINK_IMAGE,
     SEND_WORK_IMAGE,
     SUCCESS_IMAGE,
 )
-
-
-def button_text(label: str, fallback_emoji: str, emoji_key: str) -> str:
-    return f"{fallback_emoji} {label}".strip()
-
-
-def button_with_icon(
-    label: str,
-    fallback_emoji: str,
-    emoji_key: str,
-    icon_custom_emoji_id: str | None = None,
-    style: str | None = None,
-) -> KeyboardButton:
-    return KeyboardButton(
-        text=button_text(label, fallback_emoji, emoji_key),
-        icon_custom_emoji_id=icon_custom_emoji_id,
-        style=style,
-    )
 
 
 def inline_button_with_icon(
@@ -116,8 +101,9 @@ def inline_button_with_icon(
     icon_custom_emoji_id: str | None = None,
     style: str | None = None,
 ) -> InlineKeyboardButton:
+    text = f"{fallback_emoji} {label}".strip() if fallback_emoji else label
     return InlineKeyboardButton(
-        text=button_text(label, fallback_emoji, emoji_key),
+        text=text,
         callback_data=callback_data,
         url=url,
         icon_custom_emoji_id=icon_custom_emoji_id,
@@ -132,72 +118,30 @@ BTN_CREATOR = "Связь с создателем"
 BTN_ACCEPT = "Согласиться"
 BTN_DECLINE = "Отказаться"
 BTN_BACK = "Назад"
-BTN_OPEN = "Перейти"
 BTN_MAIN_MENU = "Главное меню"
-BTN_RETRY_SEND = "Отправка работы"
 
-ICON_SEND_EDIT = ""
-ICON_SEND_ART = ""
-ICON_DISCORD = ""
-ICON_CREATOR = ""
-ICON_ACCEPT = ""
-ICON_DECLINE = ""
-ICON_BACK = "↩️"
+ICON_BACK = ""
 
 KIND_LABELS = {
     "edit": "эдит",
     "art": "арт",
 }
 
-RULES = {
-    "edit": {
-        "image": RULES_IMAGE,
-        "caption": (
-            "<tg-emoji emoji-id=\"5440660757194744323\">‼</tg-emoji><b>ПЕРЕД ТЕМ КАК КИДАТЬ ЭДИТ ОЗНАКОМЬСЯ С ПРАВИЛАМИ</b>\n\n"
-            "1. Принимаются только ваши собственные работы.<tg-emoji emoji-id=\"5244555952073499173\">❗</tg-emoji>\n"
-            "2. NSFL строго нет, на пост NSFW эдита шанс мизерный.<tg-emoji emoji-id=\"5267395415627567516\">💕</tg-emoji>\n"
-            "3. Убедитесь что эдит не усыпан пикселями, низким битрейтом.<tg-emoji emoji-id=\"6001305528653844732\">❕</tg-emoji>\n"
-            "4. Музыка, клипы, стиль абсолютно неважны.\n"
-            "5. Эдит может как использоваться для постинга в канал, так и может не использоваться.\n"
-            "6. Обязательно к эдиту приложите ссылку или юзернейм на одну из своих соцсеток(указать какую), в которой должно быть: если 1000+ - ссылка на телеграм канал машрум (@etomrm), меньше 1000 - приставка .mrm в вашем собственном юзернейме.\n\n"
-            "Нажимая <b>Согласиться</b> вы соглашаетесь с данными правилами. В случае несоблюдения одного из правил предусмотрен бан, который спокойно можно обжаловать."
-        ),
-    },
-    "art": {
-        "image": RULES_IMAGE,
-        "caption": (
-            "<tg-emoji emoji-id=\"5440660757194744323\">‼</tg-emoji> <b>ПЕРЕД ТЕМ КАК КИДАТЬ АРТ ОЗНАКОМЬСЯ С ПРАВИЛАМИ</b>\n\n"
-            "1. Принимаются только ваши собственные работы.<tg-emoji emoji-id=\"5244555952073499173\">❗</tg-emoji>\n"
-            "2. NSFL строго нет, на пост NSFW арта шанс мизерный.<tg-emoji emoji-id=\"5267395415627567516\">💕</tg-emoji>\n"
-            "3. Убедитесь что арт в хорошем качестве. Файлы разрешены. Арт будет перешлен в ужатом качестве, а исходое качество будет отправлено в комментарии.\n"
-            "4. Эдит может как использоваться для постинга в канал, так и может не использоваться.\n"
-            "5. Обязательно к арту приложите ссылку или юзернейм на одну из своих соцсеток(указать какую), в которой должно быть: 1000+ - ссылка на телеграм канал машрум (@etomrm), меньше 1000 - приставка .mrm в вашем собственном юзернейме.\n\n"
-            "Нажимая <b>Согласиться</b> вы соглашаетесь с данными правилами. В случае несоблюдения одного из правил предусмотрен бан, который спокойно можно обжаловать."
-        ),
-    },
-}
-
-INFO_SCREENS = {
-    "discord": {
-        "image": DISCORD_IMAGE,
-        "icon": ICON_DISCORD,
-        "title": "Discord сервер",
-        "description": "Ниже есть кликабельная ссылка на дискорд сервер нашего сообщества.",
-        "url": DISCORD_URL,
-    },
-    "creator": {
-        "image": START_IMAGE,
-        "icon": ICON_CREATOR,
-        "title": "Связь с создателем",
-        "description": "Есть вопросы по предложке? Хотите уточнить или обжаловать причину бана? Бот не работает? Вот моя элэс.",
-        "url": CREATOR_URL,
-    },
-}
+RULES_CAPTION = (
+    '<tg-emoji emoji-id="5440660757194744323">‼</tg-emoji><b>ПЕРЕД ТЕМ КАК ОТПРАВИТЬ РАБОТУ ОЗНАКОМЬСЯ С ПРАВИЛАМИ</b>\n\n'
+    '1. Принимаются только ваши собственные работы.<tg-emoji emoji-id="5244555952073499173">❗</tg-emoji>\n'
+    '2. NSFL строго нет, на пост NSFW шанс мизерный.<tg-emoji emoji-id="5267395415627567516">💕</tg-emoji>\n'
+    '3. Убедитесь что работа в хорошем качестве.<tg-emoji emoji-id="6001305528653844732">❕</tg-emoji>\n'
+    "4. Музыка, клипы, стиль абсолютно неважны.\n"
+    "5. Работа может как использоваться для постинга в канал, так и может не использоваться.\n"
+    "6. На следующем этапе приложите ссылку на одну из своих соцсеток (TikTok, YouTube, Instagram), в которой должно быть: если 1000+ - ссылка на телеграм канал машрум (@etomrm), меньше 1000 - приставка .mrm в вашем собственном юзернейме.\n\n"
+    "Нажимая <b>Согласиться</b> вы соглашаетесь с данными правилами."
+)
 
 START_CAPTION = (
-    "<tg-emoji emoji-id=\"5244682331486187125\">👋</tg-emoji> <b>Приветствую!</b>\n\n"
+    '<tg-emoji emoji-id="5244682331486187125">👋</tg-emoji> <b>Приветствую!</b>\n\n'
     "Это предложка для канала @etomrm. Здесь вы можете отправить свой потрясный эдит или крутой арт, который мы заметим и выложим в канал, если работа действительно достойная\n"
-    "Бот сначала покажет правила, затем попросит прислать работу одним сообщением.<tg-emoji emoji-id=\"5244726380670773077\">⚡</tg-emoji>"
+    'Бот сначала покажет правила, затем попросит прислать работу одним сообщением.<tg-emoji emoji-id="5244726380670773077">⚡</tg-emoji>'
 )
 
 BANNED_CAPTION = (
@@ -206,19 +150,41 @@ BANNED_CAPTION = (
 )
 
 NO_ADMIN_CAPTION = (
-    "🚫 <b>Недостаточно прав</b>\n\n"
-    "Эта команда доступна только администраторам бота."
+    "🚫 <b>Недостаточно прав</b>\n\nЭта команда доступна только администраторам бота."
+)
+
+SOCIAL_LINK_CAPTION = (
+    '<tg-emoji emoji-id="5472146462362048818">🔗</tg-emoji> <b>Предоставьте ссылку на одну из ваших соц сетей</b>\n\n'
+    "Поддерживается TikTok, YouTube, Instagram\n\n"
+    "Отправьте ссылку текстом в этот чат."
+)
+
+INVALID_LINK_CAPTION = (
+    '<tg-emoji emoji-id="5447644880824181073">⚠</tg-emoji> <b>Неверный формат ссылки</b>\n\n'
+    "Пожалуйста, отправьте корректную ссылку на TikTok, YouTube или Instagram."
+)
+
+CONFIRMATION_CAPTION = (
+    '<tg-emoji emoji-id="5472146462362048818">📋</tg-emoji> <b>Проверьте данные перед отправкой</b>\n\n'
+    "<b>Ссылка на соц сеть:</b> {social_link}\n"
+    "<b>Описание:</b> {description}\n\n"
+    "Всё верно?"
+)
+
+EDIT_DESCRIPTION_CAPTION = (
+    '<tg-emoji emoji-id="5253742260054409879">✏️</tg-emoji> <b>Введите новое описание</b>\n\n'
+    "Отправьте текст нового описания в этот чат."
 )
 
 SEND_WORK_CAPTION = (
-    "<tg-emoji emoji-id=\"5253742260054409879\">📨</tg-emoji> <b>Отправляйте вашу работу</b>\n\n"
+    '<tg-emoji emoji-id="5253742260054409879">📨</tg-emoji> <b>Отправляйте вашу работу</b>\n\n'
     "Пришлите её одним сообщением в этот чат. Не забудьте подпись\n"
     "Поддерживаются фото, видео, анимации и файлы."
 )
 
 SUCCESS_CAPTION = (
-    "<tg-emoji emoji-id=\"5206607081334906820\">✔</tg-emoji> <b>Ваша работа была успешно отправлена!</b>\n\n"
-    "Она уже улетела к нам и будет рассмотрена как можно скорее <tg-emoji emoji-id=\"5287598581010691474\">❤</tg-emoji>"
+    '<tg-emoji emoji-id="5206607081334906820">✔</tg-emoji> <b>Ваша работа была успешно отправлена!</b>\n\n'
+    'Она уже улетела к нам и будет рассмотрена как можно скорее <tg-emoji emoji-id="5287598581010691474">❤</tg-emoji>'
 )
 
 SUCCESS_BACK_CAPTION = (
@@ -228,30 +194,24 @@ SUCCESS_BACK_CAPTION = (
 )
 
 INVALID_WORK_CAPTION = (
-    "<tg-emoji emoji-id=\"5447644880824181073\">⚠</tg-emoji> <b>Нужна сама работа</b>\n\n"
+    '<tg-emoji emoji-id="5447644880824181073">⚠</tg-emoji> <b>Нужна сама работа</b>\n\n'
     "Отправьте фото, видео, анимацию или документ одним сообщением."
 )
 
 UNKNOWN_COMMAND_CAPTION = (
-    "ℹ️ <b>Команда не распознана</b>\n\n"
-    "Используйте кнопки в меню ниже."
+    "ℹ️ <b>Команда не распознана</b>\n\nИспользуйте кнопки в меню ниже."
 )
 
 EDIT_INVALID_CAPTION = (
-    f"{'\u26a0\ufe0f'} <b>\u0414\u043b\u044f \u044d\u0434\u0438\u0442\u0430 "
-    + "\u043d\u0443\u0436\u043d\u043e \u0432\u0438\u0434\u0435\u043e \u0438\u043b\u0438 \u0444\u0430\u0439\u043b</b>\n\n"
-    + "\u0424\u043e\u0442\u043e \u043a\u0430\u043a \u0433\u043e\u0442\u043e\u0432\u044b\u0439 \u044d\u0434\u0438\u0442 "
-    + "\u043d\u0435 \u043f\u0440\u0438\u043d\u0438\u043c\u0430\u0435\u0442\u0441\u044f. "
-    + "\u041e\u0442\u043f\u0440\u0430\u0432\u044c\u0442\u0435 \u0432\u0438\u0434\u0435\u043e, GIF/\u0430\u043d\u0438\u043c\u0430\u0446\u0438\u044e "
-    + "\u0438\u043b\u0438 \u0444\u0430\u0439\u043b."
+    "⚠️ <b>Для эдита нужно видео или файл</b>\n\n"
+    "Фото как готовый эдит не принимается. "
+    "Отправьте видео, GIF/анимацию или файл."
 )
 
 ART_INVALID_CAPTION = (
-    f"{'\u26a0\ufe0f'} <b>\u0414\u043b\u044f \u0430\u0440\u0442\u0430 "
-    + "\u043d\u0443\u0436\u043d\u043e \u0444\u043e\u0442\u043e \u0438\u043b\u0438 \u0444\u0430\u0439\u043b</b>\n\n"
-    + "\u0412\u0438\u0434\u0435\u043e \u043a\u0430\u043a \u0433\u043e\u0442\u043e\u0432\u044b\u0439 \u0430\u0440\u0442 "
-    + "\u043d\u0435 \u043f\u0440\u0438\u043d\u0438\u043c\u0430\u0435\u0442\u0441\u044f. "
-    + "\u041e\u0442\u043f\u0440\u0430\u0432\u044c\u0442\u0435 \u0444\u043e\u0442\u043e \u0438\u043b\u0438 \u0444\u0430\u0439\u043b."
+    "⚠️ <b>Для арта нужно фото или файл</b>\n\n"
+    "Видео как готовый арт не принимается. "
+    "Отправьте фото или файл."
 )
 
 LOGGER = logging.getLogger("suggestion_bot")
@@ -262,7 +222,11 @@ dp = Dispatcher()
 
 class Suggestion(StatesGroup):
     reviewing_rules = State()
+    waiting_for_social_link = State()
     waiting_for_work = State()
+    confirming_submission = State()  # Проверка данных перед отправкой
+    editing_description = State()  # Изменение описания
+    editing_social_link = State()  # Изменение ссылки
 
 
 def load_registry(path: Path, root_key: str) -> dict[int, dict[str, Any]]:
@@ -321,140 +285,27 @@ def photo(image_path: Path) -> FSInputFile:
     return FSInputFile(str(image_path))
 
 
+def is_valid_social_link(text: str) -> bool:
+    """Проверяет, является ли текст корректной ссылкой на соцсеть."""
+    if not text:
+        return False
+
+    text_lower = text.lower()
+
+    # Проверяем наличие доменов соцсетей
+    valid_domains = [
+        "tiktok.com",
+        "youtube.com",
+        "youtu.be",
+        "instagram.com",
+        "instagr.am",
+    ]
+
+    return any(domain in text_lower for domain in valid_domains)
+
+
 def normalize_text(text: str | None) -> str:
     return " ".join((text or "").casefold().split())
-
-
-ACTION_ALIASES = {
-    normalize_text(BTN_SEND_EDIT): "send_edit",
-    normalize_text(f"{ICON_SEND_EDIT} {BTN_SEND_EDIT}"): "send_edit",
-    normalize_text("отправить эдит"): "send_edit",
-    normalize_text("эдит"): "send_edit",
-    normalize_text(BTN_SEND_ART): "send_art",
-    normalize_text(f"{ICON_SEND_ART} {BTN_SEND_ART}"): "send_art",
-    normalize_text("отправить арт"): "send_art",
-    normalize_text("арт"): "send_art",
-    normalize_text(BTN_DISCORD): "discord",
-    normalize_text(f"{ICON_DISCORD} {BTN_DISCORD}"): "discord",
-    normalize_text("discord сервер"): "discord",
-    normalize_text("discord"): "discord",
-    normalize_text(BTN_CREATOR): "creator",
-    normalize_text(f"{ICON_CREATOR} {BTN_CREATOR}"): "creator",
-    normalize_text("связь с создателем"): "creator",
-    normalize_text("создатель"): "creator",
-    normalize_text(BTN_ACCEPT): "accept",
-    normalize_text(f"{ICON_ACCEPT} {BTN_ACCEPT}"): "accept",
-    normalize_text("согласиться"): "accept",
-    normalize_text("согласен"): "accept",
-    normalize_text(BTN_DECLINE): "decline",
-    normalize_text(f"{ICON_DECLINE} {BTN_DECLINE}"): "decline",
-    normalize_text("отказаться"): "decline",
-    normalize_text("отказ"): "decline",
-    normalize_text(BTN_BACK): "back",
-    normalize_text(f"{ICON_BACK} {BTN_BACK}"): "back",
-    normalize_text(BTN_MAIN_MENU): "back",
-    normalize_text(f"{ICON_BACK} {BTN_MAIN_MENU}"): "back",
-    normalize_text("назад"): "back",
-    normalize_text("главное меню"): "back",
-}
-
-
-def resolve_action(text: str | None) -> str | None:
-    return ACTION_ALIASES.get(normalize_text(text))
-
-
-def build_reply_keyboard(
-    rows: list[list[tuple[str, str, str, str | None, str | None]]],
-    placeholder: str,
-) -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [
-                button_with_icon(
-                    label=label,
-                    fallback_emoji=fallback_emoji,
-                    emoji_key=emoji_key,
-                    icon_custom_emoji_id=custom_emoji_id,
-                    style=style,
-                )
-                for label, fallback_emoji, emoji_key, custom_emoji_id, style in row
-            ]
-            for row in rows
-        ],
-        resize_keyboard=True,
-        is_persistent=True,
-        input_field_placeholder=placeholder,
-    )
-
-
-def persistent_menu() -> ReplyKeyboardMarkup:
-    return build_reply_keyboard(
-        [
-            [
-                (BTN_SEND_EDIT, ICON_SEND_EDIT, "send_edit", "5190674036861992770", "primary"),
-                (BTN_SEND_ART, ICON_SEND_ART, "send_art", "5409109841538994759", "primary"),
-            ],
-            [
-                (BTN_ACCEPT, ICON_ACCEPT, "accept", "5289671946408043028", "success"),
-                (BTN_DECLINE, ICON_DECLINE, "decline", "5289576280306493734", "danger"),
-            ],
-            [
-                (BTN_DISCORD, ICON_DISCORD, "discord", "5325612636467903082", "default"),
-                (BTN_CREATOR, ICON_CREATOR, "creator", "5330237710655306682", "default"),
-            ],
-            [
-                (BTN_BACK, ICON_BACK, "back", None, "default"),
-            ],
-        ],
-        "Выберите действие",
-    )
-
-
-def main_menu() -> ReplyKeyboardMarkup:
-    return build_reply_keyboard(
-        [
-            [
-                (BTN_SEND_EDIT, ICON_SEND_EDIT, "send_edit", "5190674036861992770", "primary"),
-                (BTN_SEND_ART, ICON_SEND_ART, "send_art", "5409109841538994759", "primary"),
-            ],
-            [
-                (BTN_DISCORD, ICON_DISCORD, "discord", "5325612636467903082", "default"),
-                (BTN_CREATOR, ICON_CREATOR, "creator", "5330237710655306682", "default"),
-            ],
-        ],
-        "Выберите действие",
-    )
-
-
-def rules_menu() -> ReplyKeyboardMarkup:
-    return build_reply_keyboard(
-        [[
-            (BTN_ACCEPT, ICON_ACCEPT, "accept", "5289671946408043028", "success"),
-            (BTN_DECLINE, ICON_DECLINE, "decline", "5289576280306493734", "danger"),
-        ]],
-        "Примите или отклоните правила",
-    )
-
-
-def info_menu() -> ReplyKeyboardMarkup:
-    return build_reply_keyboard(
-        [[(BTN_BACK, ICON_BACK, "back", None, "default")]],
-        "Вернуться назад",
-    )
-
-
-def send_work_menu() -> ReplyKeyboardMarkup:
-    return build_reply_keyboard(
-        [[(BTN_BACK, ICON_BACK, "back", None, "default")]],
-        "Отправьте работу или вернитесь назад",
-    )
-
-
-def banned_menu() -> ReplyKeyboardMarkup:
-    return build_reply_keyboard(
-        [[(BTN_CREATOR, ICON_CREATOR, "creator", "5771449289972650710", "default")]],
-        "Связаться с создателем",
-    )
 
 
 def inline_main_menu() -> InlineKeyboardMarkup:
@@ -463,38 +314,38 @@ def inline_main_menu() -> InlineKeyboardMarkup:
             [
                 inline_button_with_icon(
                     BTN_SEND_EDIT,
-                    ICON_SEND_EDIT,
+                    "",
                     "send_edit",
-                    callback_data="rules:edit",
-                    icon_custom_emoji_id="5190674036861992770",
+                    callback_data="start_submission:edit",
+                    icon_custom_emoji_id="5373330964372004748",
                     style="primary",
                 ),
                 inline_button_with_icon(
                     BTN_SEND_ART,
-                    ICON_SEND_ART,
+                    "",
                     "send_art",
-                    callback_data="rules:art",
-                    icon_custom_emoji_id="6028435952299413210",
+                    callback_data="start_submission:art",
+                    icon_custom_emoji_id="5431456208487716895",
                     style="primary",
                 ),
             ],
             [
                 inline_button_with_icon(
                     BTN_DISCORD,
-                    ICON_DISCORD,
+                    "",
                     "discord",
                     url=DISCORD_URL,
-                    icon_custom_emoji_id="5771449289972650710",
+                    icon_custom_emoji_id="5120881320813134776",
                     style="default",
                 )
             ],
             [
                 inline_button_with_icon(
                     BTN_CREATOR,
-                    ICON_CREATOR,
+                    "",
                     "creator",
-                    callback_data="info:creator",
-                    icon_custom_emoji_id="5771449289972650710",
+                    url=CREATOR_URL,
+                    icon_custom_emoji_id="4974342362433061851",
                     style="default",
                 )
             ],
@@ -502,21 +353,21 @@ def inline_main_menu() -> InlineKeyboardMarkup:
     )
 
 
-def inline_rules_menu(kind: str) -> InlineKeyboardMarkup:
+def inline_rules_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 inline_button_with_icon(
                     BTN_ACCEPT,
-                    ICON_ACCEPT,
+                    "",
                     "accept",
-                    callback_data=f"accept:{kind}",
+                    callback_data="accept_rules",
                     icon_custom_emoji_id="5289671946408043028",
                     style="success",
                 ),
                 inline_button_with_icon(
                     BTN_DECLINE,
-                    ICON_DECLINE,
+                    "",
                     "decline",
                     callback_data="start",
                     icon_custom_emoji_id="5289576280306493734",
@@ -527,25 +378,61 @@ def inline_rules_menu(kind: str) -> InlineKeyboardMarkup:
     )
 
 
-def inline_info_menu(kind: str) -> InlineKeyboardMarkup:
-    info = INFO_SCREENS[kind]
+def inline_social_link_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                inline_button_with_icon(
-                    BTN_OPEN,
-                    "",
-                    "open",
-                    url=info["url"],
-                    style="primary",
-                )
-            ],
             [
                 inline_button_with_icon(
                     BTN_BACK,
                     ICON_BACK,
                     "back",
                     callback_data="start",
+                    icon_custom_emoji_id="5278288719705547525",
+                    style="default",
+                )
+            ]
+        ]
+    )
+
+
+def inline_confirmation_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                inline_button_with_icon(
+                    "Да, всё верно",
+                    "",
+                    "confirm",
+                    callback_data="confirm_submission",
+                    icon_custom_emoji_id="5289671946408043028",
+                    style="success",
+                )
+            ],
+            [
+                inline_button_with_icon(
+                    "Изменить описание",
+                    "",
+                    "edit_desc",
+                    callback_data="edit_description",
+                    icon_custom_emoji_id="5395444784611480792",
+                    style="default",
+                ),
+                inline_button_with_icon(
+                    "Изменить ссылку",
+                    "",
+                    "edit_link",
+                    callback_data="edit_link",
+                    icon_custom_emoji_id="5271604874419647061",
+                    style="default",
+                ),
+            ],
+            [
+                inline_button_with_icon(
+                    BTN_BACK,
+                    ICON_BACK,
+                    "back",
+                    callback_data="back_to_work",
+                    icon_custom_emoji_id="5278288719705547525",
                     style="default",
                 )
             ],
@@ -562,51 +449,11 @@ def inline_send_work_menu() -> InlineKeyboardMarkup:
                     ICON_BACK,
                     "back",
                     callback_data="start",
+                    icon_custom_emoji_id="5278288719705547525",
                     style="default",
                 )
             ]
         ]
-    )
-
-
-def inline_failure_menu(kind: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                inline_button_with_icon(
-                    BTN_RETRY_SEND,
-                    "📨",
-                    "send",
-                    callback_data=f"retry:{kind}",
-                    icon_custom_emoji_id="6028435952299413210",
-                    style="primary",
-                )
-            ]
-        ]
-    )
-
-
-def inline_banned_menu() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                inline_button_with_icon(
-                    BTN_CREATOR,
-                    ICON_CREATOR,
-                    "creator",
-                    url=CREATOR_URL,
-                    icon_custom_emoji_id="5771449289972650710",
-                    style="default",
-                )
-            ]
-        ]
-    )
-
-
-def success_menu() -> ReplyKeyboardMarkup:
-    return build_reply_keyboard(
-        [[(BTN_MAIN_MENU, ICON_BACK, "back", None, "success")]],
-        "Вернуться в меню",
     )
 
 
@@ -619,6 +466,7 @@ def inline_success_menu() -> InlineKeyboardMarkup:
                     ICON_BACK,
                     "back",
                     callback_data="start",
+                    icon_custom_emoji_id="5278288719705547525",
                     style="success",
                 )
             ]
@@ -663,7 +511,6 @@ def remember_user(user: User | None) -> bool:
     except OSError:
         LOGGER.exception("Не удалось сохранить users.json")
 
-
     return is_new_user
 
 
@@ -679,9 +526,17 @@ def get_user_profile(user_id: int) -> dict[str, Any]:
 def format_user_card(user_id: int, live_user: User | None = None) -> str:
     profile = get_user_profile(user_id)
 
-    username = (live_user.username if live_user else "") or profile.get("username") or ""
-    full_name = (live_user.full_name if live_user else "") or profile.get("full_name") or ""
-    language_code = (live_user.language_code if live_user else "") or profile.get("language_code") or ""
+    username = (
+        (live_user.username if live_user else "") or profile.get("username") or ""
+    )
+    full_name = (
+        (live_user.full_name if live_user else "") or profile.get("full_name") or ""
+    )
+    language_code = (
+        (live_user.language_code if live_user else "")
+        or profile.get("language_code")
+        or ""
+    )
 
     mention_label = escape_text(full_name or f"Пользователь {user_id}")
     lines = [
@@ -717,36 +572,29 @@ def format_user_line(user_id: int) -> str:
     return " | ".join(parts)
 
 
-def build_info_caption(kind: str) -> str:
-    data = INFO_SCREENS[kind]
-    return (
-        f'{data["icon"]} <b>{escape_text(data["title"])}</b>\n\n'
-        f'{escape_text(data["description"])}'
-    )
-
-
-def build_submission_log(message: Message, kind: str) -> str:
-    user = message.from_user
-    text_part = message.caption or message.text or ""
-    preview = escape_text(text_part[:400]) if text_part else "—"
+def build_submission_log(
+    user: User,
+    kind: str,
+    social_link: str | None = None,
+    description: str | None = None,
+) -> str:
+    preview = escape_text(description[:400]) if description else "—"
+    username = f"@{user.username}" if user.username else "нет"
+    social_text = escape_text(social_link) if social_link else "не указана"
 
     return (
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "📥 <b>Новая работа от</b>\n\n"
-        f"👤 <b>Отправил:</b>\n"
-        f"{format_user_card(user.id, user)}\n\n"
-        f"📂 <b>Отправлен</b> {escape_text(KIND_LABELS.get(kind, kind))}\n"
-        f"📎 <b>Файл формата:</b> <code>{escape_text(message.content_type)}</code>\n"
-        f"💬 <b>Текст/подпись:</b> {preview}\n"
+        "📥 <b>Новая работа</b>\n\n"
+        f"👤 <b>От:</b> {username}\n"
+        f"🔗 <b>Соц сеть:</b> {social_text}\n"
+        f"📂 <b>Тип:</b> {escape_text(KIND_LABELS.get(kind, kind))}\n"
+        f"💬 <b>Описание:</b> {preview}\n"
         "━━━━━━━━━━━━━━━━━━━━"
     )
 
 
 def build_new_user_log(user: User) -> str:
-    return (
-        "👋 <b>Новый пользователь бота</b>\n"
-        f"{format_user_card(user.id, user)}"
-    )
+    return f"👋 <b>Новый пользователь бота</b>\n{format_user_card(user.id, user)}"
 
 
 def get_allowed_content_types(kind: str) -> set[str]:
@@ -765,16 +613,6 @@ def get_invalid_submission_caption(kind: str) -> str:
     return INVALID_WORK_CAPTION
 
 
-async def sync_reply_keyboard(
-    chat_id: int,
-    keyboard: ReplyKeyboardMarkup | None = None,
-    helper_text: str = "Главное меню",
-) -> int | None:
-    # Не отправляем лишние сообщения для удаления клавиатуры
-    # Клавиатура будет удалена автоматически при отправке следующего сообщения с ReplyKeyboardRemove
-    return None
-
-
 async def send_photo_screen(
     message: Message,
     image_path: Path,
@@ -783,47 +621,19 @@ async def send_photo_screen(
     reply_keyboard: ReplyKeyboardMarkup | None = None,
     helper_text: str = "Главное меню",
 ) -> None:
-    # Если нужно показать inline кнопки (нет reply клавиатуры)
+    # Определяем какую клавиатуру использовать
     if reply_keyboard is None and inline_keyboard is not None:
-        # Сначала убираем reply клавиатуру
-        remove_msg = await message.answer(
-            "⏳",
-            reply_markup=ReplyKeyboardRemove(),
-        )
-        
-        # Отправляем фото с inline кнопками
-        new_msg = await message.answer_photo(
+        # Используем inline клавиатуру
+        await message.answer_photo(
             photo(image_path),
             caption=trim_caption(caption),
             reply_markup=inline_keyboard,
         )
-        
-        # Ждем 1 секунду перед удалением старых сообщений
-        await asyncio.sleep(1)
-        
-        # Удаляем все предыдущие сообщения, кроме последних 3
-        for i in range(4, 30):  # Начинаем с 4, чтобы оставить последние 3 сообщения
-            try:
-                await bot.delete_message(
-                    chat_id=message.chat.id,
-                    message_id=message.message_id - i
-                )
-            except Exception:
-                pass  # Игнорируем ошибки, если сообщение не найдено
-        # Удаляем сообщение пользователя
-        try:
-            await message.delete()
-        except Exception:
-            LOGGER.debug("Не удалось удалить сообщение пользователя")
-        
-        # Удаляем сообщение с песочными часами
-        try:
-            await remove_msg.delete()
-        except Exception:
-            LOGGER.debug("Не удалось удалить сообщение с ReplyKeyboardRemove")
     else:
-        # Если есть reply клавиатура или нет кнопок вообще
-        photo_reply_markup = reply_keyboard if reply_keyboard is not None else ReplyKeyboardRemove()
+        # Используем reply клавиатуру или убираем её
+        photo_reply_markup = (
+            reply_keyboard if reply_keyboard is not None else ReplyKeyboardRemove()
+        )
         await message.answer_photo(
             photo(image_path),
             caption=trim_caption(caption),
@@ -840,47 +650,31 @@ async def send_callback_screen(
     helper_text: str = "Главное меню",
 ) -> None:
     chat_id = callback.message.chat.id if callback.message else callback.from_user.id
-    old_message_id = callback.message.message_id if callback.message else None
 
     # Если нужно показать inline кнопки (нет reply клавиатуры)
     if reply_keyboard is None and inline_keyboard is not None:
-        # Сначала убираем reply клавиатуру
-        remove_msg = await bot.send_message(
-            chat_id=chat_id,
-            text="⏳",
-            reply_markup=ReplyKeyboardRemove(),
-        )
-        
-        # Затем отправляем фото с inline кнопками
-        await bot.send_photo(
-            chat_id=chat_id,
-            photo=photo(image_path),
-            caption=trim_caption(caption),
-            reply_markup=inline_keyboard,
-        )
-        
-        # Удаляем предыдущее сообщение (главное меню или другое)
-        if old_message_id:
-            try:
-                await bot.delete_message(chat_id=chat_id, message_id=old_message_id)
-            except Exception:
-                LOGGER.debug("Не удалось удалить старое сообщение после callback")
-        
-        # Удаляем сообщение с песочными часами
+        # Пытаемся отредактировать существующее сообщение
         try:
-            await bot.delete_message(chat_id=chat_id, message_id=remove_msg.message_id)
+            await callback.message.edit_media(
+                media=InputMediaPhoto(
+                    media=photo(image_path),
+                    caption=trim_caption(caption),
+                ),
+                reply_markup=inline_keyboard,
+            )
         except Exception:
-            LOGGER.debug("Не удалось удалить сообщение с ReplyKeyboardRemove")
+            # Если не получилось отредактировать, отправляем новое
+            await bot.send_photo(
+                chat_id=chat_id,
+                photo=photo(image_path),
+                caption=trim_caption(caption),
+                reply_markup=inline_keyboard,
+            )
     else:
-        # Удаляем предыдущее сообщение сразу
-        if callback.message:
-            try:
-                await callback.message.delete()
-            except Exception:
-                LOGGER.debug("Не удалось удалить старое сообщение после callback")
-        
-        # Если есть reply клавиатура или нет кнопок вообще
-        photo_reply_markup = reply_keyboard if reply_keyboard is not None else ReplyKeyboardRemove()
+        # Если есть reply клавиатура - отправляем новое сообщение
+        photo_reply_markup = (
+            reply_keyboard if reply_keyboard is not None else ReplyKeyboardRemove()
+        )
         await bot.send_photo(
             chat_id=chat_id,
             photo=photo(image_path),
@@ -926,12 +720,14 @@ async def show_start_screen(target: Message | CallbackQuery, state: FSMContext) 
         target,
         START_IMAGE,
         START_CAPTION,
-        reply_keyboard=main_menu(),
+        inline_keyboard=inline_main_menu(),
         helper_text="Главное меню",
     )
 
 
-async def show_banned_screen(target: Message | CallbackQuery, state: FSMContext) -> None:
+async def show_banned_screen(
+    target: Message | CallbackQuery, state: FSMContext
+) -> None:
     await state.clear()
     await show_screen(
         target,
@@ -942,39 +738,133 @@ async def show_banned_screen(target: Message | CallbackQuery, state: FSMContext)
     )
 
 
-async def show_info_screen(target: Message | CallbackQuery, state: FSMContext, kind: str) -> None:
-    await state.clear()
-    await show_screen(
-        target,
-        INFO_SCREENS[kind]["image"],
-        build_info_caption(kind),
-        inline_keyboard=inline_info_menu(kind),
-        reply_keyboard=None,
-    )
-
-
-async def show_rules_screen(target: Message | CallbackQuery, state: FSMContext, kind: str) -> None:
+async def show_rules_screen(
+    target: Message | CallbackQuery, state: FSMContext, kind: str
+) -> None:
     await state.set_state(Suggestion.reviewing_rules)
     await state.update_data(kind=kind)
     await show_screen(
         target,
-        RULES[kind]["image"],
-        RULES[kind]["caption"],
-        inline_keyboard=inline_rules_menu(kind),
+        RULES_IMAGE,
+        RULES_CAPTION,
+        inline_keyboard=inline_rules_menu(),
         reply_keyboard=None,
     )
 
 
-async def show_send_work_screen(target: Message | CallbackQuery, state: FSMContext, kind: str) -> None:
+async def show_social_link_screen(
+    target: Message | CallbackQuery, state: FSMContext, kind: str
+) -> None:
+    await state.set_state(Suggestion.waiting_for_social_link)
+    await state.update_data(kind=kind)
+    await show_screen(
+        target,
+        SOCIAL_LINK_IMAGE,
+        SOCIAL_LINK_CAPTION,
+        inline_keyboard=inline_social_link_menu(),
+        helper_text="Ссылка на соц сеть",
+    )
+
+
+async def show_invalid_link_screen(
+    target: Message | CallbackQuery, state: FSMContext
+) -> None:
+    # Не меняем состояние - остаемся в waiting_for_social_link
+    await show_screen(
+        target,
+        SOCIAL_LINK_IMAGE,
+        INVALID_LINK_CAPTION,
+        inline_keyboard=None,  # Убираем кнопки
+        helper_text="Неверная ссылка",
+    )
+
+
+async def show_send_work_screen(
+    target: Message | CallbackQuery, state: FSMContext, kind: str
+) -> None:
     await state.set_state(Suggestion.waiting_for_work)
     await state.update_data(kind=kind)
     await show_screen(
         target,
         SEND_WORK_IMAGE,
         SEND_WORK_CAPTION,
-        reply_keyboard=send_work_menu(),
+        inline_keyboard=inline_send_work_menu(),
         helper_text="Отправка работы",
     )
+
+
+async def show_confirmation_screen(
+    target: Message | CallbackQuery, state: FSMContext
+) -> None:
+    data = await state.get_data()
+    social_link = data.get("social_link", "Не указана")
+    description = data.get("description", "Без описания")
+
+    caption = CONFIRMATION_CAPTION.format(
+        social_link=escape_text(social_link), description=escape_text(description)
+    )
+
+    await state.set_state(Suggestion.confirming_submission)
+
+    # Получаем медиа данные
+    media_type = data.get("media_type")
+    file_id = data.get("file_id")
+
+    chat_id = target.chat.id if isinstance(target, Message) else target.message.chat.id
+
+    # Отправляем медиа с caption подтверждения
+    try:
+        if media_type == "photo":
+            await bot.send_photo(
+                chat_id=chat_id,
+                photo=file_id,
+                caption=caption,
+                reply_markup=inline_confirmation_menu(),
+            )
+        elif media_type == "video":
+            await bot.send_video(
+                chat_id=chat_id,
+                video=file_id,
+                caption=caption,
+                reply_markup=inline_confirmation_menu(),
+            )
+        elif media_type == "animation":
+            await bot.send_animation(
+                chat_id=chat_id,
+                animation=file_id,
+                caption=caption,
+                reply_markup=inline_confirmation_menu(),
+            )
+        elif media_type == "document":
+            await bot.send_document(
+                chat_id=chat_id,
+                document=file_id,
+                caption=caption,
+                reply_markup=inline_confirmation_menu(),
+            )
+        else:
+            # Если медиа нет, показываем обычный экран
+            await show_screen(
+                target,
+                SEND_WORK_IMAGE,
+                caption,
+                inline_keyboard=inline_confirmation_menu(),
+                helper_text="Проверка данных",
+            )
+
+        # Отвечаем на callback если это callback
+        if isinstance(target, CallbackQuery):
+            await target.answer()
+    except Exception as e:
+        LOGGER.exception("Ошибка при отправке медиа в подтверждении")
+        # Fallback на обычный экран
+        await show_screen(
+            target,
+            SEND_WORK_IMAGE,
+            caption,
+            inline_keyboard=inline_confirmation_menu(),
+            helper_text="Проверка данных",
+        )
 
 
 async def show_success_screen(target: Message | CallbackQuery) -> None:
@@ -1001,7 +891,7 @@ async def show_failure_screen(
         target,
         image_path,
         caption,
-        inline_keyboard=inline_failure_menu(kind),
+        inline_keyboard=inline_send_work_menu(),
         reply_keyboard=None,
     )
 
@@ -1049,10 +939,19 @@ async def set_bot_commands() -> None:
 async def cmd_start(message: Message, state: FSMContext) -> None:
     if not await ensure_allowed_message(message, state):
         return
-    
+
+    # Добавляем или обновляем пользователя в базе
+    user = message.from_user
+    add_or_update_user(
+        user_id=user.id,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
+    )
+
     # Проверяем текущее состояние
     current_state = await state.get_state()
-    
+
     # Если пользователь в процессе (не в главном меню), игнорируем команду
     if current_state is not None:
         # Отправляем уведомление, что команда недоступна
@@ -1061,7 +960,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             "Используйте кнопки для навигации.",
         )
         return
-    
+
     await show_start_screen(message, state)
 
 
@@ -1085,9 +984,8 @@ async def ban_user(message: Message, state: FSMContext) -> None:
         await send_photo_screen(
             message,
             START_IMAGE,
-            "ℹ️ <b>Использование</b>\n\n<code>/ban user_id причина</code>",
+            NO_ADMIN_CAPTION,
             inline_keyboard=inline_main_menu(),
-            reply_keyboard=main_menu(),
         )
         return
 
@@ -1113,7 +1011,6 @@ async def ban_user(message: Message, state: FSMContext) -> None:
             f"Причина: {escape_text(reason)}"
         ),
         inline_keyboard=inline_main_menu(),
-        reply_keyboard=main_menu(),
     )
     await log_to_channel(
         "🚫 <b>Бан пользователя</b>\n"
@@ -1145,7 +1042,6 @@ async def unban_user(message: Message, state: FSMContext) -> None:
             START_IMAGE,
             "ℹ️ <b>Использование</b>\n\n<code>/unban user_id</code>",
             inline_keyboard=inline_main_menu(),
-            reply_keyboard=main_menu(),
         )
         return
 
@@ -1157,27 +1053,18 @@ async def unban_user(message: Message, state: FSMContext) -> None:
     admin_card = format_user_card(message.from_user.id, message.from_user)
 
     if existed:
-        caption = (
-            "✅ <b>Пользователь разбанен</b>\n\n"
-            f"{target_card}"
-        )
+        caption = f"✅ <b>Пользователь разбанен</b>\n\n{target_card}"
         await log_to_channel(
-            "✅ <b>Разбан пользователя</b>\n"
-            f"{target_card}\n\n"
-            f"Админ:\n{admin_card}"
+            f"✅ <b>Разбан пользователя</b>\n{target_card}\n\nАдмин:\n{admin_card}"
         )
     else:
-        caption = (
-            "ℹ️ <b>Пользователь не найден в бан-листе</b>\n\n"
-            f"{target_card}"
-        )
+        caption = f"ℹ️ <b>Пользователь не найден в бан-листе</b>\n\n{target_card}"
 
     await send_photo_screen(
         message,
         START_IMAGE,
         trim_caption(caption),
         inline_keyboard=inline_main_menu(),
-        reply_keyboard=main_menu(),
     )
 
 
@@ -1202,7 +1089,6 @@ async def show_ban_list(message: Message, state: FSMContext) -> None:
             START_IMAGE,
             "✅ <b>Бан-лист пуст</b>",
             inline_keyboard=inline_main_menu(),
-            reply_keyboard=main_menu(),
         )
         return
 
@@ -1220,48 +1106,7 @@ async def show_ban_list(message: Message, state: FSMContext) -> None:
         START_IMAGE,
         trim_caption("\n".join(lines)),
         inline_keyboard=inline_main_menu(),
-        reply_keyboard=main_menu(),
     )
-
-
-@dp.message(Suggestion.reviewing_rules, F.text)
-async def handle_rules_buttons(message: Message, state: FSMContext) -> None:
-    if not await ensure_allowed_message(message, state):
-        return
-
-    action = resolve_action(message.text)
-    data = await state.get_data()
-    kind = data.get("kind")
-
-    if action == "accept" and kind in RULES:
-        await show_send_work_screen(message, state, kind)
-        return
-
-    if action in {"decline", "back"}:
-        await show_start_screen(message, state)
-        return
-
-    if action == "send_edit":
-        await show_rules_screen(message, state, "edit")
-        return
-
-    if action == "send_art":
-        await show_rules_screen(message, state, "art")
-        return
-
-    if action == "discord":
-        await show_info_screen(message, state, "discord")
-        return
-
-    if action == "creator":
-        await show_info_screen(message, state, "creator")
-        return
-
-    if kind in RULES:
-        await show_rules_screen(message, state, kind)
-        return
-
-    await show_start_screen(message, state)
 
 
 @dp.message(Suggestion.waiting_for_work, F.photo | F.video | F.document | F.animation)
@@ -1271,6 +1116,8 @@ async def handle_submission(message: Message, state: FSMContext) -> None:
 
     data = await state.get_data()
     kind = data.get("kind", "edit")
+
+    # Проверяем тип контента
     if message.content_type not in get_allowed_content_types(kind):
         await show_failure_screen(
             message,
@@ -1280,102 +1127,178 @@ async def handle_submission(message: Message, state: FSMContext) -> None:
         )
         return
 
-    user_id = message.from_user.id
-    now = time.time()
-    last_time = last_submission_at.get(user_id, 0)
-    passed = now - last_time
+    # Определяем тип медиа и file_id
+    media_type = None
+    file_id = None
 
-    if passed < SUBMISSION_COOLDOWN_SECONDS:
-        remaining = int(SUBMISSION_COOLDOWN_SECONDS - passed)
-        await show_failure_screen(
-            message,
-            state,
-            kind,
-            (
-                "⏳ <b>Антиспам включён</b>\n\n"
-                f"Подождите ещё <b>{remaining}</b> сек. перед новой отправкой."
-            ),
-            image_path=START_IMAGE,
-        )
-        return
+    if message.photo:
+        file_id = message.photo[-1].file_id
+        media_type = "photo"
+    elif message.video:
+        file_id = message.video.file_id
+        media_type = "video"
+    elif message.animation:
+        file_id = message.animation.file_id
+        media_type = "animation"
+    elif message.document:
+        file_id = message.document.file_id
+        media_type = "document"
 
-    # Отправляем медиа с информацией об отправителе в одном посте
-    caption = build_submission_log(message, kind)
-    
+    # Сохраняем данные медиа и описание
+    await state.update_data(
+        media_type=media_type,
+        file_id=file_id,
+        description=message.caption or "",
+        media_message=message.message_id,
+    )
+
+    # Удаляем сообщение пользователя с работой
     try:
-        if message.photo:
-            await bot.send_photo(
-                chat_id=LOG_CHANNEL_ID,
-                photo=message.photo[-1].file_id,
-                caption=caption,
-            )
-        elif message.video:
-            await bot.send_video(
-                chat_id=LOG_CHANNEL_ID,
-                video=message.video.file_id,
-                caption=caption,
-            )
-        elif message.animation:
-            await bot.send_animation(
-                chat_id=LOG_CHANNEL_ID,
-                animation=message.animation.file_id,
-                caption=caption,
-            )
-        elif message.document:
-            await bot.send_document(
-                chat_id=LOG_CHANNEL_ID,
-                document=message.document.file_id,
-                caption=caption,
-            )
-        else:
-            # Если тип медиа неизвестен, отправляем только текст
-            await log_to_channel(caption)
+        await message.delete()
     except Exception:
-        LOGGER.exception("Не удалось отправить работу в лог-канал")
+        LOGGER.debug("Не удалось удалить сообщение пользователя с работой")
 
-    last_submission_at[user_id] = now
-    await state.clear()
-    await show_success_screen(message)
+    # Показываем экран подтверждения
+    await show_confirmation_screen(message, state)
 
 
-@dp.message(Suggestion.waiting_for_work)
-async def handle_waiting_for_work_text(message: Message, state: FSMContext) -> None:
+@dp.message(Suggestion.waiting_for_social_link, F.text)
+async def handle_social_link(message: Message, state: FSMContext) -> None:
     if not await ensure_allowed_message(message, state):
         return
 
-    action = resolve_action(message.text if message.text else "")
-    kind = (await state.get_data()).get("kind", "edit")
-
-    if action == "accept":
-        await show_send_work_screen(message, state, kind)
+    # Проверяем валидность ссылки
+    if not is_valid_social_link(message.text):
+        await show_invalid_link_screen(message, state)
         return
 
-    if action in {"back", "decline"}:
-        await show_start_screen(message, state)
+    # Сохраняем ссылку и переходим к отправке работы
+    await state.update_data(social_link=message.text)
+    data = await state.get_data()
+    kind = data.get("kind", "edit")
+
+    # Удаляем сообщение пользователя со ссылкой
+    try:
+        await message.delete()
+    except Exception:
+        LOGGER.debug("Не удалось удалить сообщение пользователя со ссылкой")
+
+    await show_send_work_screen(message, state, kind)
+
+
+@dp.message(Suggestion.editing_social_link, F.text)
+async def handle_edit_social_link(message: Message, state: FSMContext) -> None:
+    if not await ensure_allowed_message(message, state):
         return
 
-    if action == "discord":
-        await show_info_screen(message, state, "discord")
+    # Проверяем валидность ссылки
+    if not is_valid_social_link(message.text):
+        await show_invalid_link_screen(message, state)
         return
 
-    if action == "creator":
-        await show_info_screen(message, state, "creator")
+    # Удаляем сообщение пользователя с новой ссылкой
+    try:
+        await message.delete()
+    except Exception:
+        LOGGER.debug("Не удалось удалить сообщение пользователя с новой ссылкой")
+
+    # Обновляем ссылку и возвращаемся к подтверждению
+    await state.update_data(social_link=message.text)
+    await show_confirmation_screen(message, state)
+
+
+@dp.message(Suggestion.editing_description, F.text)
+async def handle_edit_description(message: Message, state: FSMContext) -> None:
+    if not await ensure_allowed_message(message, state):
         return
 
-    if action == "send_edit":
-        await show_rules_screen(message, state, "edit")
+    # Удаляем сообщение пользователя с новым описанием
+    try:
+        await message.delete()
+    except Exception:
+        LOGGER.debug("Не удалось удалить сообщение пользователя с новым описанием")
+
+    # Обновляем описание и возвращаемся к подтверждению
+    await state.update_data(description=message.text)
+    await show_confirmation_screen(message, state)
+
+
+# Обработчики неправильных типов сообщений
+@dp.message(Suggestion.waiting_for_social_link)
+async def handle_wrong_type_for_link(message: Message, state: FSMContext) -> None:
+    """Обработка неправильных типов сообщений при ожидании ссылки"""
+    if not await ensure_allowed_message(message, state):
         return
 
-    if action == "send_art":
-        await show_rules_screen(message, state, "art")
+    # Отправляем why.mp4
+    try:
+        await message.answer_video(
+            video=FSInputFile(str(WHY_VIDEO)),
+            caption="⚠️ <b>Сейчас нужно отправить ссылку на соцсеть</b>\n\nОтправьте ссылку текстом (например: https://www.tiktok.com/@username)",
+        )
+    except Exception:
+        await message.answer(
+            "⚠️ <b>Сейчас нужно отправить ссылку на соцсеть</b>\n\nОтправьте ссылку текстом (например: https://www.tiktok.com/@username)"
+        )
+
+
+@dp.message(Suggestion.waiting_for_work)
+async def handle_wrong_type_for_work(message: Message, state: FSMContext) -> None:
+    """Обработка неправильных типов сообщений при ожидании работы"""
+    if not await ensure_allowed_message(message, state):
         return
 
-    await show_failure_screen(
-        message,
-        state,
-        kind,
-        get_invalid_submission_caption(kind),
-    )
+    data = await state.get_data()
+    kind = data.get("kind", "edit")
+
+    # Отправляем why.mp4
+    try:
+        await message.answer_video(
+            video=FSInputFile(str(WHY_VIDEO)),
+            caption=f"⚠️ <b>Сейчас нужно отправить работу</b>\n\n{get_invalid_submission_caption(kind)}",
+        )
+    except Exception:
+        await message.answer(
+            f"⚠️ <b>Сейчас нужно отправить работу</b>\n\n{get_invalid_submission_caption(kind)}"
+        )
+
+
+@dp.message(Suggestion.editing_social_link)
+async def handle_wrong_type_for_edit_link(message: Message, state: FSMContext) -> None:
+    """Обработка неправильных типов сообщений при редактировании ссылки"""
+    if not await ensure_allowed_message(message, state):
+        return
+
+    # Отправляем why.mp4
+    try:
+        await message.answer_video(
+            video=FSInputFile(str(WHY_VIDEO)),
+            caption="⚠️ <b>Сейчас нужно отправить новую ссылку на соцсеть</b>\n\nОтправьте ссылку текстом (например: https://www.tiktok.com/@username)",
+        )
+    except Exception:
+        await message.answer(
+            "⚠️ <b>Сейчас нужно отправить новую ссылку на соцсеть</b>\n\nОтправьте ссылку текстом (например: https://www.tiktok.com/@username)"
+        )
+
+
+@dp.message(Suggestion.editing_description)
+async def handle_wrong_type_for_edit_description(
+    message: Message, state: FSMContext
+) -> None:
+    """Обработка неправильных типов сообщений при редактировании описания"""
+    if not await ensure_allowed_message(message, state):
+        return
+
+    # Отправляем why.mp4
+    try:
+        await message.answer_video(
+            video=FSInputFile(str(WHY_VIDEO)),
+            caption="⚠️ <b>Сейчас нужно отправить новое описание</b>\n\nОтправьте текст описания в этот чат",
+        )
+    except Exception:
+        await message.answer(
+            "⚠️ <b>Сейчас нужно отправить новое описание</b>\n\nОтправьте текст описания в этот чат"
+        )
 
 
 @dp.message(F.text)
@@ -1383,26 +1306,9 @@ async def handle_main_menu_buttons(message: Message, state: FSMContext) -> None:
     if not await ensure_allowed_message(message, state):
         return
 
-    action = resolve_action(message.text)
-
-    if action == "send_edit":
-        await show_rules_screen(message, state, "edit")
-        return
-
-    if action == "send_art":
-        await show_rules_screen(message, state, "art")
-        return
-
-    if action == "discord":
-        await show_info_screen(message, state, "discord")
-        return
-
-    if action == "creator":
-        await show_info_screen(message, state, "creator")
-        return
-
-    if action in {"back", "decline", "accept"}:
-        await show_start_screen(message, state)
+    # Если пользователь в процессе, игнорируем текстовые команды
+    current_state = await state.get_state()
+    if current_state is not None:
         return
 
     caption = START_CAPTION
@@ -1414,7 +1320,6 @@ async def handle_main_menu_buttons(message: Message, state: FSMContext) -> None:
         START_IMAGE,
         caption,
         inline_keyboard=inline_main_menu(),
-        reply_keyboard=main_menu(),
     )
 
 
@@ -1422,23 +1327,26 @@ async def handle_main_menu_buttons(message: Message, state: FSMContext) -> None:
 async def fallback_message(message: Message, state: FSMContext) -> None:
     if not await ensure_allowed_message(message, state):
         return
+
+    # Если пользователь в процессе отправки работы, показываем ошибку
+    current_state = await state.get_state()
+    if current_state == Suggestion.waiting_for_work:
+        data = await state.get_data()
+        kind = data.get("kind", "edit")
+        await show_failure_screen(
+            message,
+            state,
+            kind,
+            get_invalid_submission_caption(kind),
+        )
+        return
+
     await send_photo_screen(
         message,
         START_IMAGE,
         START_CAPTION,
         inline_keyboard=inline_main_menu(),
-        reply_keyboard=main_menu(),
     )
-
-
-# ID стикера загрузки (замените на свой)
-LOADING_STICKER_ID = "CAACAgIAAxkBAAIBZV9vLjKjLjKjLjKjLjKjLjKjLjKj"
-
-
-async def show_loading(callback: CallbackQuery) -> Message:
-    """Показывает сообщение загрузки, которое удалится автоматически при следующем сообщении."""
-    loading_msg = await callback.message.answer("⏳")
-    return loading_msg
 
 
 # Legacy callback support for previously sent inline messages.
@@ -1446,76 +1354,210 @@ async def show_loading(callback: CallbackQuery) -> Message:
 async def callback_start(callback: CallbackQuery, state: FSMContext) -> None:
     if not await ensure_allowed_callback(callback, state):
         return
-    await show_loading(callback)
+
     await show_start_screen(callback, state)
 
 
-@dp.callback_query(F.data.startswith("info:"))
-async def callback_info(callback: CallbackQuery, state: FSMContext) -> None:
+@dp.callback_query(F.data.startswith("start_submission:"))
+async def callback_start_submission(callback: CallbackQuery, state: FSMContext) -> None:
     if not await ensure_allowed_callback(callback, state):
         return
 
     kind = callback.data.split(":", 1)[1]
-    if kind not in INFO_SCREENS:
-        await show_start_screen(callback, state)
-        return
-
-    await show_loading(callback)
-    await show_info_screen(callback, state, kind)
-
-
-@dp.callback_query(F.data.startswith("rules:"))
-async def callback_rules(callback: CallbackQuery, state: FSMContext) -> None:
-    if not await ensure_allowed_callback(callback, state):
-        return
-
-    kind = callback.data.split(":", 1)[1]
-    if kind not in RULES:
-        await show_start_screen(callback, state)
-        return
-
-    await show_loading(callback)
     await show_rules_screen(callback, state, kind)
 
 
-@dp.callback_query(F.data.startswith("accept:"))
-async def callback_accept(callback: CallbackQuery, state: FSMContext) -> None:
+@dp.callback_query(F.data == "accept_rules")
+async def callback_accept_rules(callback: CallbackQuery, state: FSMContext) -> None:
     if not await ensure_allowed_callback(callback, state):
         return
 
-    kind = callback.data.split(":", 1)[1]
-    if kind not in RULES:
-        await show_start_screen(callback, state)
-        return
-
-    loading_msg = await show_loading(callback)
-    await show_send_work_screen(callback, state, kind)
-    
-    # Удаляем сообщение загрузки после показа следующего экрана
-    try:
-        await loading_msg.delete()
-    except Exception:
-        LOGGER.debug("Не удалось удалить сообщение загрузки")
+    data = await state.get_data()
+    kind = data.get("kind", "edit")
+    await show_social_link_screen(callback, state, kind)
 
 
-@dp.callback_query(F.data.startswith("retry:"))
-async def callback_retry(callback: CallbackQuery, state: FSMContext) -> None:
+@dp.callback_query(F.data == "confirm_submission")
+async def callback_confirm_submission(
+    callback: CallbackQuery, state: FSMContext
+) -> None:
     if not await ensure_allowed_callback(callback, state):
         return
 
-    kind = callback.data.split(":", 1)[1]
-    if kind not in RULES:
-        await show_start_screen(callback, state)
+    data = await state.get_data()
+    kind = data.get("kind", "edit")
+    social_link = data.get("social_link")
+    description = data.get("description", "")
+    user_id = callback.from_user.id
+
+    # Получаем медиа данные
+    media_type = data.get("media_type")
+    file_id = data.get("file_id")
+
+    # Проверяем кулдаун
+    now = time.time()
+    last_time = last_submission_at.get(user_id, 0)
+    passed = now - last_time
+
+    if passed < SUBMISSION_COOLDOWN_SECONDS:
+        remaining = int(SUBMISSION_COOLDOWN_SECONDS - passed)
+        await callback.answer(
+            f"⏳ Подождите ещё {remaining} сек. перед новой отправкой.", show_alert=True
+        )
         return
 
-    loading_msg = await show_loading(callback)
-    await show_send_work_screen(callback, state, kind)
-    
-    # Удаляем сообщение загрузки после показа следующего экрана
+    # Отправляем в лог-канал
+    caption = build_submission_log(callback.from_user, kind, social_link, description)
+
     try:
-        await loading_msg.delete()
-    except Exception:
-        LOGGER.debug("Не удалось удалить сообщение загрузки")
+        LOGGER.info(
+            f"Отправка работы: user_id={user_id}, kind={kind}, media_type={media_type}"
+        )
+
+        if media_type == "photo":
+            await bot.send_photo(
+                chat_id=LOG_CHANNEL_ID,
+                photo=file_id,
+                caption=caption,
+            )
+        elif media_type == "video":
+            await bot.send_video(
+                chat_id=LOG_CHANNEL_ID,
+                video=file_id,
+                caption=caption,
+            )
+        elif media_type == "animation":
+            await bot.send_animation(
+                chat_id=LOG_CHANNEL_ID,
+                animation=file_id,
+                caption=caption,
+            )
+        elif media_type == "document":
+            await bot.send_document(
+                chat_id=LOG_CHANNEL_ID,
+                document=file_id,
+                caption=caption,
+            )
+
+        # Сохраняем в базу
+        add_media_submission(
+            user_id=user_id,
+            kind=kind,
+            media_type=media_type,
+            file_id=file_id,
+            caption=description,
+            social_link=social_link,
+        )
+
+        increment_user_submissions(user_id)
+        add_log("info", f"Успешная отправка медиа ({media_type})", user_id)
+
+        last_submission_at[user_id] = now
+        await state.clear()
+        await show_success_screen(callback)
+
+    except Exception as e:
+        LOGGER.exception("Не удалось отправить работу в лог-канал")
+        LOGGER.error(
+            f"Детали ошибки: user_id={user_id}, kind={kind}, media_type={media_type}, file_id={file_id}"
+        )
+        add_log("error", f"Ошибка отправки в канал: {str(e)}", user_id)
+        await callback.answer(
+            "❌ Ошибка при отправке. Попробуйте позже.", show_alert=True
+        )
+
+
+@dp.callback_query(F.data == "edit_description")
+async def callback_edit_description(callback: CallbackQuery, state: FSMContext) -> None:
+    if not await ensure_allowed_callback(callback, state):
+        return
+
+    await state.set_state(Suggestion.editing_description)
+
+    # Получаем медиа данные
+    data = await state.get_data()
+    media_type = data.get("media_type")
+    file_id = data.get("file_id")
+
+    chat_id = callback.message.chat.id
+
+    # Отправляем медиа с запросом нового описания
+    try:
+        if media_type == "photo":
+            await bot.send_photo(
+                chat_id=chat_id,
+                photo=file_id,
+                caption=EDIT_DESCRIPTION_CAPTION,
+                reply_markup=inline_send_work_menu(),
+            )
+        elif media_type == "video":
+            await bot.send_video(
+                chat_id=chat_id,
+                video=file_id,
+                caption=EDIT_DESCRIPTION_CAPTION,
+                reply_markup=inline_send_work_menu(),
+            )
+        elif media_type == "animation":
+            await bot.send_animation(
+                chat_id=chat_id,
+                animation=file_id,
+                caption=EDIT_DESCRIPTION_CAPTION,
+                reply_markup=inline_send_work_menu(),
+            )
+        elif media_type == "document":
+            await bot.send_document(
+                chat_id=chat_id,
+                document=file_id,
+                caption=EDIT_DESCRIPTION_CAPTION,
+                reply_markup=inline_send_work_menu(),
+            )
+        else:
+            # Fallback на обычный экран
+            await show_screen(
+                callback,
+                SEND_WORK_IMAGE,
+                EDIT_DESCRIPTION_CAPTION,
+                inline_keyboard=inline_send_work_menu(),
+                helper_text="Изменение описания",
+            )
+
+        await callback.answer()
+    except Exception as e:
+        LOGGER.exception("Ошибка при отправке медиа для редактирования описания")
+        await show_screen(
+            callback,
+            SEND_WORK_IMAGE,
+            EDIT_DESCRIPTION_CAPTION,
+            inline_keyboard=inline_send_work_menu(),
+            helper_text="Изменение описания",
+        )
+
+
+@dp.callback_query(F.data == "edit_link")
+async def callback_edit_link(callback: CallbackQuery, state: FSMContext) -> None:
+    if not await ensure_allowed_callback(callback, state):
+        return
+
+    await state.set_state(Suggestion.editing_social_link)
+
+    # Показываем экран запроса ссылки без изменения kind
+    await show_screen(
+        callback,
+        SOCIAL_LINK_IMAGE,
+        SOCIAL_LINK_CAPTION,
+        inline_keyboard=inline_social_link_menu(),
+        helper_text="Изменение ссылки",
+    )
+
+
+@dp.callback_query(F.data == "back_to_work")
+async def callback_back_to_work(callback: CallbackQuery, state: FSMContext) -> None:
+    if not await ensure_allowed_callback(callback, state):
+        return
+
+    data = await state.get_data()
+    kind = data.get("kind", "edit")
+    await show_send_work_screen(callback, state, kind)
 
 
 @dp.errors()
@@ -1538,7 +1580,11 @@ async def handle_errors(event: ErrorEvent) -> bool:
     await log_to_channel(payload)
     LOGGER.error(
         "Необработанная ошибка",
-        exc_info=(type(event.exception), event.exception, event.exception.__traceback__),
+        exc_info=(
+            type(event.exception),
+            event.exception,
+            event.exception.__traceback__,
+        ),
     )
     return True
 

@@ -1,12 +1,28 @@
 {
   "users": {
+    "1225502448": {
+      "username": "",
+      "full_name": "laidins",
+      "first_name": "laidins",
+      "last_name": "",
+      "language_code": "ru",
+      "last_seen": "2026-04-02 19:00:53"
+    },
+    "1715369389": {
+      "username": "Dimentyyyy",
+      "full_name": "Диментий",
+      "first_name": "Диментий",
+      "last_name": "",
+      "language_code": "ru",
+      "last_seen": "2026-04-05 21:23:22"
+    },
     "1784522503": {
       "username": "pexepo",
       "full_name": "pexepo",
       "first_name": "pexepo",
       "last_name": "",
       "language_code": "ru",
-      "last_seen": "2026-04-02 01:07:03"
+      "last_seen": "2026-04-06 00:28:31"
     },
     "1987638251": {
       "username": "erm358",
@@ -15,6 +31,22 @@
       "last_name": "",
       "language_code": "ru",
       "last_seen": "2026-03-31 21:04:54"
+    },
+    "7154769684": {
+      "username": "kewlud",
+      "full_name": "лера придурок",
+      "first_name": "лера придурок",
+      "last_name": "",
+      "language_code": "ru",
+      "last_seen": "2026-04-05 23:18:06"
+    },
+    "8592937423": {
+      "username": "dikamii",
+      "full_name": "dikamii",
+      "first_name": "dikamii",
+      "last_name": "",
+      "language_code": "en",
+      "last_seen": "2026-04-06 00:23:46"
     }
   }
 }
