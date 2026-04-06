@@ -30,6 +30,20 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 
+# Middleware для логирования всех запросов
+@app.before_request
+def log_request():
+    print(
+        f">>> Incoming request: {request.method} {request.path} from {request.remote_addr}"
+    )
+
+
+@app.after_request
+def log_response(response):
+    print(f"<<< Response: {response.status_code} for {request.path}")
+    return response
+
+
 def login_required(f):
     """Декоратор для проверки авторизации."""
 
@@ -238,4 +252,9 @@ def api_logs():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    print(f"=== ADMIN PANEL STARTING ===")
+    print(f"Port: {port}")
+    print(f"Host: 0.0.0.0")
+    print(f"Debug: False")
+    print(f"===========================")
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
