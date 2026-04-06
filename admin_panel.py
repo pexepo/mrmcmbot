@@ -17,7 +17,10 @@ from database import (
     get_media_submissions,
     get_stats,
 )
-from bot import bot, LOG_CHANNEL_ID
+
+# Конфигурация (без импорта bot, чтобы избежать конфликта токенов)
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8579457514:AAEAzcBbCpf4Lq9wj762cKhzzdjEXjf_Zso")
+LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "-1003626245326"))
 
 app = Flask(__name__)
 app.secret_key = os.getenv("ADMIN_SECRET_KEY", "change-this-secret-key-in-production")
@@ -143,18 +146,65 @@ def media_detail(media_id):
 
 @app.route("/api/download/<file_id>")
 @login_required
-async def download_media(file_id):
+def download_media(file_id):
     """Скачивание медиа в максимальном качестве."""
     try:
-        file = await bot.get_file(file_id)
-        file_path = file.file_path
+        import requests
+        import io
+        from pathlib import Path
 
-        # Получаем файл через Telegram Bot API
-        file_url = f"https://api.telegram.org/file/bot{bot.token}/{file_path}"
+        # Получаем информацию о файле через Telegram Bot API
+        response = requests.get(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
+            params={"file_id": file_id},
+            timeout=10,
+        )
 
-        return redirect(file_url)
+        if response.status_code != 200:
+            return jsonify({"error": "Не удалось получить информацию о файле"}), 500
+
+        result = response.json()
+        if not result.get("ok"):
+            return jsonify({"error": "Telegram API вернул ошибку"}), 500
+
+        file_path = result["result"]["file_path"]
+
+        # Скачиваем файл
+        file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+        file_response = requests.get(file_url, timeout=30)
+
+        if file_response.status_code != 200:
+            return jsonify({"error": "Не удалось скачать файл"}), 500
+
+        # Определяем имя файла и MIME тип
+        filename = Path(file_path).name
+
+        # Определяем MIME тип по расширению
+        mime_types = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".mp4": "video/mp4",
+            ".mov": "video/quicktime",
+            ".avi": "video/x-msvideo",
+        }
+
+        file_ext = Path(filename).suffix.lower()
+        mime_type = mime_types.get(file_ext, "application/octet-stream")
+
+        # Отправляем файл пользователю
+        return send_file(
+            io.BytesIO(file_response.content),
+            mimetype=mime_type,
+            as_attachment=True,
+            download_name=filename,
+        )
+
+    except requests.Timeout:
+        return jsonify({"error": "Превышено время ожидания"}), 504
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Ошибка: {str(e)}"}), 500
 
 
 @app.route("/api/stats")
