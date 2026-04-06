@@ -42,6 +42,12 @@ def login_required(f):
     return decorated_function
 
 
+@app.route("/health")
+def health():
+    """Health check endpoint для BotHost."""
+    return jsonify({"status": "ok"}), 200
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """Страница входа."""
