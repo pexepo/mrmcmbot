@@ -215,15 +215,20 @@
             
             <div class="actions">
                 <h3 style="margin-bottom: 15px;">Действия</h3>
-                <a href="https://api.telegram.org/file/bot{{ media.file_id }}" target="_blank" class="btn btn-primary">
+                <a href="/api/download/{{ media.file_id }}" class="btn btn-primary">
                     📥 Скачать в максимальном качестве
-                </a>
-                <a href="https://t.me/c/{{ log_channel_id|string|replace('-100', '') }}" target="_blank" class="btn btn-success">
-                    📨 Перейти к посту в лог-канале
                 </a>
                 <a href="/media" class="btn btn-secondary">
                     ← Вернуться к списку
                 </a>
+                
+                <div style="margin-top: 20px; padding: 15px; background: #f7fafc; border-radius: 8px;">
+                    <strong>Ссылка на пост в лог-канале:</strong><br>
+                    <small style="color: #718096;">Канал приватный, ссылка для справки</small><br>
+                    <code style="background: white; padding: 5px 10px; border-radius: 4px; display: inline-block; margin-top: 5px;">
+                        https://t.me/c/{{ log_channel_id|string|replace('-100', '') }}
+                    </code>
+                </div>
             </div>
         </div>
     </div>

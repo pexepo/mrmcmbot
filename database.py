@@ -67,6 +67,10 @@ def add_or_update_user(
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
+    # Проверяем, существует ли пользователь
+    cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
+    is_new_user = cursor.fetchone() is None
+
     cursor.execute(
         """
         INSERT INTO users (user_id, username, first_name, last_name, last_activity)
@@ -79,6 +83,17 @@ def add_or_update_user(
     """,
         (user_id, username, first_name, last_name),
     )
+
+    # Логируем нового пользователя
+    if is_new_user:
+        user_display = f"@{username}" if username else f"{first_name or 'Unknown'}"
+        cursor.execute(
+            """
+            INSERT INTO logs (log_type, user_id, message)
+            VALUES (?, ?, ?)
+        """,
+            ("new_user", user_id, f"Новый пользователь: {user_display}"),
+        )
 
     conn.commit()
     conn.close()
