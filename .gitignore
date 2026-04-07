@@ -1,0 +1,21 @@
+```gitignore
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+
+# База данных (будет создана на хостинге)
+*.db
+*.sqlite
+
+# Конфиденциальные данные
+.env
+bans.json
+users.json
+
+# IDE
+.vscode/
+.idea/
+```
