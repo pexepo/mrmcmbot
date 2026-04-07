@@ -62,6 +62,14 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 
+@app.route("/")
+def index():
+    """Главная страница - редирект на dashboard или login."""
+    if session.get("logged_in"):
+        return redirect(url_for("dashboard"))
+    return redirect(url_for("login"))
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """Страница входа."""
@@ -85,7 +93,7 @@ def logout():
     return redirect(url_for("login"))
 
 
-@app.route("/")
+@app.route("/dashboard")
 @login_required
 def dashboard():
     """Главная страница панели."""
