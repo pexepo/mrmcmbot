@@ -1,3 +1,4 @@
 aiogram==3.26.0
 flask
 requests
+psycopg2-binary
