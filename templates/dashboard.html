@@ -55,31 +55,55 @@
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 15px;
     }
+    
+    .update-info {
+        text-align: center;
+        color: #666;
+        font-size: 13px;
+        margin-top: 20px;
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.7);
+        border-radius: 8px;
+    }
+    
+    .updating {
+        animation: pulse 1s infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="stats-grid">
+<div class="stats-grid" id="stats-grid">
     <div class="stat-card">
         <div class="icon">👥</div>
         <h3>Всего пользователей</h3>
-        <div class="number">{{ stats.total_users }}</div>
+        <div class="number" id="total-users">{{ stats.total_users }}</div>
     </div>
     <div class="stat-card">
         <div class="icon">⚡</div>
         <h3>Активных за 24ч</h3>
-        <div class="number">{{ stats.active_24h }}</div>
+        <div class="number" id="active-24h">{{ stats.active_24h }}</div>
     </div>
     <div class="stat-card">
         <div class="icon">📤</div>
         <h3>Всего отправок</h3>
-        <div class="number">{{ stats.total_submissions }}</div>
+        <div class="number" id="total-submissions">{{ stats.total_submissions }}</div>
     </div>
     <div class="stat-card">
         <div class="icon">🚫</div>
         <h3>Забанено</h3>
-        <div class="number">{{ stats.banned_users }}</div>
+        <div class="number" id="banned-users">{{ stats.banned_users }}</div>
     </div>
+</div>
+
+<div class="update-info">
+    <span id="update-status">Обновление каждые 10 секунд</span> • 
+    <span id="last-update">Последнее обновление: только что</span>
 </div>
 
 <div class="card">
@@ -93,4 +117,39 @@
         <a href="/media" class="btn btn-primary">📸 Медиа отправки</a>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Автообновление статистики каждые 10 секунд
+    function updateStats() {
+        const statusEl = document.getElementById('update-status');
+        statusEl.textContent = 'Обновление...';
+        statusEl.classList.add('updating');
+        
+        fetch('/api/stats')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('total-users').textContent = data.total_users;
+                document.getElementById('active-24h').textContent = data.active_24h;
+                document.getElementById('total-submissions').textContent = data.total_submissions;
+                document.getElementById('banned-users').textContent = data.banned_users;
+                
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('ru-RU');
+                document.getElementById('last-update').textContent = `Последнее обновление: ${timeStr}`;
+                
+                statusEl.textContent = 'Обновление каждые 10 секунд';
+                statusEl.classList.remove('updating');
+            })
+            .catch(error => {
+                console.error('Ошибка обновления:', error);
+                statusEl.textContent = 'Ошибка обновления';
+                statusEl.classList.remove('updating');
+            });
+    }
+    
+    // Обновляем каждые 10 секунд
+    setInterval(updateStats, 10000);
+</script>
 {% endblock %}
